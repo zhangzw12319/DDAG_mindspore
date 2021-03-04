@@ -54,7 +54,7 @@ if __name__ == "__main__":
     parser.add_argument('--test-only', action='store_true', help='test only')
     parser.add_argument('--model_path', default='save_model/', type=str,
                         help='model save path')
-    parser.add_argument('--debug', default=False, type=bool, 
+    parser.add_argument('--debug', action="store_true", 
                         help='if set true, use a demo dataset for debugging')
     parser.add_argument('--save_epoch', default=20, type=int,
                         metavar='s', help='save model every 10 epochs')
@@ -209,6 +209,9 @@ if __name__ == "__main__":
     
     # Model Building
     print('==> Building model..')
+    n_class = len(np.unique(trainset_generator.train_color_label))
+    nquery = len(query_label)
+    ngall = len(gall_label)
     net = embed_net(args.low_dim, n_class, drop=args.drop, part=args.part, arch=args.arch, wpa=args.wpa)
     # TODO: voncert to mindspore
     # net.to(device) 
@@ -222,22 +225,22 @@ if __name__ == "__main__":
     # optimizer
     if args.optim == 'sgd':
         ignored_params = list(map(id, net.bottleneck.get_parameters())) \
-                        + list(map(id, net.classifier.get_parameters()) \
+                        + list(map(id, net.classifier.get_parameters())) \
                         + list(map(id, net.wpa.get_parameters()))
         base_params = filter(lambda p: id(p) not in ignored_params, net.get_parameters())
 
-    optimizer_P = optim.SGD([
-        {'params': base_params, 'lr': 0.1 * args.lr},
-        {'params': net.bottleneck.get_parameters(), 'lr': args.lr},
-        {'params': net.classifier.get_parameters(), 'lr': args.lr},
-        {'params': net.wpa.get_parameters(), 'lr': args.lr},
-        # {'params': net.attention_0.parameters(), 'lr': args.lr},
-        # {'params': net.attention_1.parameters(), 'lr': args.lr},
-        # {'params': net.attention_2.parameters(), 'lr': args.lr},
-        # {'params': net.attention_3.parameters(), 'lr': args.lr},
-        # {'params': net.out_att.parameters(), 'lr': args.lr} ,
-        ],
-        weight_decay=5e-4, momentum=0.9, nesterov=True)
+        optimizer_P = optim.SGD([
+            {'params': base_params, 'lr': 0.1 * args.lr},
+            {'params': net.bottleneck.get_parameters(), 'lr': args.lr},
+            {'params': net.classifier.get_parameters(), 'lr': args.lr},
+            {'params': net.wpa.get_parameters(), 'lr': args.lr},
+            # {'params': net.attention_0.parameters(), 'lr': args.lr},
+            # {'params': net.attention_1.parameters(), 'lr': args.lr},
+            # {'params': net.attention_2.parameters(), 'lr': args.lr},
+            # {'params': net.attention_3.parameters(), 'lr': args.lr},
+            # {'params': net.out_att.parameters(), 'lr': args.lr} ,
+            ],
+            weight_decay=5e-4, momentum=0.9, nesterov=True)
 
     # optimizer_G = optim.SGD([
     #     {'params': net.attention_0.parameters(), 'lr': args.lr},

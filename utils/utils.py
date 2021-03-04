@@ -33,8 +33,6 @@ class IdentitySampler(ds.Sampler):
     def __init__(self, train_color_label, train_thermal_label, color_pos, thermal_pos, num_pos, batchSize, epoch):        
         uni_label = np.unique(train_color_label)
         self.n_classes = len(uni_label)
-        
-        
         N = np.maximum(len(train_color_label), len(train_thermal_label)) 
         for j in range(int(N/(batchSize*num_pos))+1):
             batch_idx = np.random.choice(uni_label, batchSize, replace = False)  
@@ -55,7 +53,7 @@ class IdentitySampler(ds.Sampler):
         self.num_samples = N
         
     def __iter__(self):
-        return iter(np.arange(len(self.index1))) # 改成mindsore话，返回的应该是对应id随机筛选出来的4张image(2张ir, 2张rgb)的index
+        return iter(np.arange(len(self.index1))) # 改成mindspore话，返回的应该是对应id随机筛选出来的4张image(2张ir, 2张rgb)的index
     def __len__(self):
         return self.N
 

@@ -1,8 +1,8 @@
 import mindspore.nn as nn
 import mindspore.ops as ops
 import mindspore.common.initializer as weight_init
-from resnet import *
-from attention import IWPA
+from model.resnet import *
+from model.attention import IWPA
 
 
 class Normalize(nn.Cell):
@@ -50,9 +50,9 @@ class thermal_module(nn.Cell):
 
 
 class base_resnet(nn.Cell):
-    def __init__(self, arch="resnet50")():
+    def __init__(self, arch="resnet50"):
         super(base_resnet, self).__init__()
-        model_base = resnet50(last_conv_dilation=1, last_conv_dilation=1)
+        model_base = resnet50(last_conv_stride=1, last_conv_dilation=1)
         # avg pooling to global pooling
         model_base.avgpool = nn.AvgPool2d((1,1))
         self.base = model_base

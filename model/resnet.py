@@ -36,14 +36,14 @@ def _weight_variable(shape, factor=0.01):
     return Tensor(init_value)
 
 
-def _conv3x3(in_channel, out_channel, stride=1, use_se=False, padding=0, dilaton=1):
+def _conv3x3(in_channel, out_channel, stride=1, use_se=False, padding=0, dilation=1):
     if use_se:
         weight = _conv_variance_scaling_initializer(in_channel, out_channel, kernel_size=3)
     else:
         weight_shape = (out_channel, in_channel, 3, 3)
         weight = _weight_variable(weight_shape)
     return nn.Conv2d(in_channel, out_channel,
-                     kernel_size=3, stride=stride, padding=padding, pad_mode='same', weight_init=weight, dilation=dilation)
+                     kernel_size=3, stride=stride, padding=padding, weight_init=weight, dilation=dilation)
 
 
 def _conv1x1(in_channel, out_channel, stride=1, use_se=False):
@@ -53,7 +53,7 @@ def _conv1x1(in_channel, out_channel, stride=1, use_se=False):
         weight_shape = (out_channel, in_channel, 1, 1)
         weight = _weight_variable(weight_shape)
     return nn.Conv2d(in_channel, out_channel,
-                     kernel_size=1, stride=stride, padding=0, pad_mode='same', weight_init=weight)
+                     kernel_size=1, stride=stride, padding=0, weight_init=weight)
 
 
 def _conv7x7(in_channel, out_channel, stride=1, use_se=False):
@@ -369,6 +369,7 @@ def resnet50(class_num=10, last_conv_stride=2, last_conv_dilation=1):
     return ResNet(ResidualBlock,
                 [3, 4, 6, 3],
                 [64, 256, 512, 1024],
+                [256, 512, 1024, 2048],
                 strides,
                 class_num,
                 last_conv_dilation=last_conv_dilation)

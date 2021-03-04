@@ -5,7 +5,9 @@ from mindspore.ops import L2Normalize
 from mindspore.common.initializer import Normal, Constant
 
 class IWPA(nn.Cell):
-    super(IWPA, self).__init__(self, in_channels, part=3, inter_channels=None, out_channels=None):
+    def __init__(self, in_channels, part=3, inter_channels=None, out_channels=None):
+        super(IWPA, self).__init__()
+        
         self.in_channels = in_channels
         self.inter_channels = inter_channels
         self.out_channels = out_channels
