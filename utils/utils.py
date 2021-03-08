@@ -53,7 +53,8 @@ class IdentitySampler(ds.Sampler):
         self.num_samples = N
         
     def __iter__(self):
-        return iter(np.arange(len(self.index1))) # 改成mindspore话，返回的应该是对应id随机筛选出来的4张image(2张ir, 2张rgb)的index
+        return iter(np.arange(len(self.index1))) 
+        
     def __len__(self):
         return self.N
 

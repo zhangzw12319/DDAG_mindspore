@@ -43,7 +43,7 @@ def _conv3x3(in_channel, out_channel, stride=1, use_se=False, padding=0, dilatio
         weight_shape = (out_channel, in_channel, 3, 3)
         weight = _weight_variable(weight_shape)
     return nn.Conv2d(in_channel, out_channel,
-                     kernel_size=3, stride=stride, padding=padding, weight_init=weight, dilation=dilation)
+                     kernel_size=3, stride=stride, padding=0, weight_init=weight, dilation=dilation)
 
 
 def _conv1x1(in_channel, out_channel, stride=1, use_se=False):

@@ -9,7 +9,10 @@ import mindspore.dataset as ds
 import mindspore.dataset.vision.c_transforms as c_trans
 import mindspore.dataset.vision.py_transforms as py_trans
 from mindspore import context, Model, load_checkpoint, load_param_into_net
+from mindspore.context import ParallelMode
 from mindspore.dataset.transforms.py_transforms import Compose
+from mindspore.train.callback import LossMonitor
+from mindspore.nn import Momentum
 
 from utils.utils import *
 from PIL import Image
@@ -54,6 +57,8 @@ if __name__ == "__main__":
     parser.add_argument('--test-only', action='store_true', help='test only')
     parser.add_argument('--model_path', default='save_model/', type=str,
                         help='model save path')
+    parser.add_argument('--run_distribute', action='store_true', 
+                        help="if set true, this code will be run on distrubuted architecture with mindspore")                    
     parser.add_argument('--debug', action="store_true", 
                         help='if set true, use a demo dataset for debugging')
     parser.add_argument('--save_epoch', default=20, type=int,
@@ -70,7 +75,7 @@ if __name__ == "__main__":
                         metavar='imgw', help='img width')
     parser.add_argument('--img_h', default=288, type=int,
                         metavar='imgh', help='img height')
-    parser.add_argument('--batch-size', default=8, type=int,
+    parser.add_argument('--batch-size', default=4, type=int,
                         metavar='B', help='training batch size')
     parser.add_argument('--test-batch', default=64, type=int,
                         metavar='tb', help='testing batch size')
@@ -102,8 +107,8 @@ if __name__ == "__main__":
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     if len(args.gpu) > 0:
         context.set_context(mode=context.PYNATIVE_MODE, device_target="GPU")
-        if config.run_distribute:
-            init("nccl")
+        if len(args.run_distribute)>0:
+            # init("nccl")
             # context.set_auto_parallel_context(device_num=get_group_size(),
             #                                   parallel_mode=ParallelMode.DATA_PARALLEL,
             #                                   gradients_mean=True)
@@ -114,7 +119,6 @@ if __name__ == "__main__":
     else:
         context.set_context(mode=context.PYNATIVE_MODE, device_target="CPU")
 
-    
 
     dataset_type = args.dataset
 
@@ -229,7 +233,7 @@ if __name__ == "__main__":
                         + list(map(id, net.wpa.get_parameters()))
         base_params = filter(lambda p: id(p) not in ignored_params, net.get_parameters())
 
-        optimizer_P = optim.SGD([
+        optimizer_P = Momentum([
             {'params': base_params, 'lr': 0.1 * args.lr},
             {'params': net.bottleneck.get_parameters(), 'lr': args.lr},
             {'params': net.classifier.get_parameters(), 'lr': args.lr},
@@ -240,7 +244,7 @@ if __name__ == "__main__":
             # {'params': net.attention_3.parameters(), 'lr': args.lr},
             # {'params': net.out_att.parameters(), 'lr': args.lr} ,
             ],
-            weight_decay=5e-4, momentum=0.9, nesterov=True)
+            learning_rate=args.lr, weight_decay=5e-4, momentum=0.9)
 
     # optimizer_G = optim.SGD([
     #     {'params': net.attention_0.parameters(), 'lr': args.lr},
@@ -260,49 +264,23 @@ if __name__ == "__main__":
         sampler = IdentitySampler(trainset_generator.train_color_label, \
                                 trainset_generator.train_thermal_label, color_pos, thermal_pos, args.num_pos, args.batch_size,
                                 epoch)
-        trainset = ds.GeneratorDataset(trainset_generator, ["data", "label"], sampler=sampler).map(
-            operations=transform_train, input_columns=["data"]
+        trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal","color_label", "thermal_label"]).map(
+            operations=transform_train, input_columns=["color", "thermal"]
         )
         
         # trainset.cIndex = sampler.index1  # color index
         # trainset.tIndex = sampler.index2  # infrared index
         print(epoch)
-        print(sampler.cIndex)
-        print(sampler.tIndex)
+        # print(sampler.cIndex)
+        # print(sampler.tIndex)
 
         loader_batch = args.batch_size * args.num_pos
 
-#     trainloader = data.DataLoader(trainset, batch_size=loader_batch, \
-#                                   sampler=sampler, num_workers=args.workers, drop_last=True)
+        # define callbacks
+        loss_cb = LossMonitor()
+        cb = [loss_cb]
 
-#     # training
-#     wG = train(epoch, wG)
+        # model = Model(net, loss_fn=criterion1, optimizer=optimizer_P, metrics=None)
+        # model.train(1, trainset, callbacks=cb)
 
-#     if epoch > 0 and epoch % 2 == 0:
-#         print('Test Epoch: {}'.format(epoch))
-#         print('Test Epoch: {}'.format(epoch), file=test_log_file)
-
-#         # testing
-#         cmc, mAP, mINP, cmc_att, mAP_att, mINP_att = test(epoch)
-#         # log output
-#         print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
-#             cmc[0], cmc[4], cmc[9], cmc[19], mAP, mINP))
-#         print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
-#             cmc[0], cmc[4], cmc[9], cmc[19], mAP, mINP), file=test_log_file)
-
-#         print('FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
-#             cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att, mINP_att))
-#         print('FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}| mINP: {:.2%}'.format(
-#             cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att, mINP_att), file=test_log_file)
-#         test_log_file.flush()
         
-#         # save model
-#         if cmc_att[0] > best_acc:  # not the real best for sysu-mm01
-#             best_acc = cmc_att[0]
-#             state = {
-#                 'net': net.state_dict(),
-#                 'cmc': cmc_att,
-#                 'mAP': mAP_att,
-#                 'epoch': epoch,
-#             }
-#             torch.save(state, checkpoint_path + suffix + '_best.t')

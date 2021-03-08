@@ -1,8 +1,10 @@
-import numpy as numpy
+import numpy as np
 import mindspore as ms
 import mindspore.nn as nn
+import mindspore.common.initializer as weight_init
 from mindspore.ops import L2Normalize
 from mindspore.common.initializer import Normal, Constant
+
 
 class IWPA(nn.Cell):
     def __init__(self, in_channels, part=3, inter_channels=None, out_channels=None):
@@ -28,24 +30,24 @@ class IWPA(nn.Cell):
         self.fc3 = nn.Conv2d(in_channels=self.in_channels, out_channels=self.inter_channels,
         kernel_size=1, stride=1, padding=0)
 
-        self.W = nn.Sequential(
+        self.W = nn.SequentialCell(
             nn.Conv2d(in_channels=self.inter_channels, out_channels=self.out_channels,
             kernel_size=1, stride=1, padding=0),
             nn.BatchNorm2d(self.out_channels),
         )
-        self.W[1].weight.set_data(Constant(0.0))
-        self.w[2].bias.set_data(Constant(0.0))
+        # self.W[1].weight.set_data(Constant(0.0))
+        # self.w[2].bias.set_data(Constant(0.0))
 
         self.bottleneck = nn.BatchNorm1d(in_channels)
-        self.bottleneck.bias.requires_grad(False) # no shift
+        self.bottleneck.requires_grad=False # no shift
 
-        self.bottleneck.weight.set_data(Normal(sigma=0.01)) 
+        # self.bottleneck.weight.set_data(Normal(sigma=0.01)) 
     #In original PyTorch code:nn.init.normal_(self.bottleneck.weight.data, 1.0, 0.01)
-        self.bottleneck.bias.set_data(Constant(0.0))
+       
 
         # weighting vector of the part features
-        self.gate = ms.Parameter(ms.Tensor(part))
-        self.gate.set_data(Constant(1/part))
+        self.gate = ms.Parameter(ms.Tensor(np.ones(part)), name="w", requires_grad=True)
+        self.gate.set_data(weight_init.initializer(Constant(1/part), self.gate.shape, self.gate.dtype))
 
 
     def construct(self, x, feat, t=None, part=0): # ? what is t?

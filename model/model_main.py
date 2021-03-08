@@ -82,7 +82,7 @@ class embed_net(nn.Cell):
 
         self.l2norm = Normalize(2)
         self.bottleneck = nn.BatchNorm1d(pool_dim)
-        self.bottleneck.requires_grad(False) # Maybe problematic? Original in PyTorch bottleneck.bias.requires_grad(False)
+        self.bottleneck.requires_grad=False # Maybe problematic? Original in PyTorch bottleneck.bias.requires_grad(False)
 
         self.classifier = nn.Dense(pool_dim, class_num, has_bias=False)
         # self.classifier1 = nn.Dense(pool_dim, class_num, has_bias=False)
@@ -94,9 +94,9 @@ class embed_net(nn.Cell):
         # self.classifier1.apply(weights_init_classifier)
         # self.classifier2.apply(weights_init_classifier)
 
-        self.bottleneck.weight.set_data(weight_init.Normal(sigma=0.01), self.bottleneck.weight.shape, self.bottleneck.weight.dtype)
-        self.classifier.weight.set_data(weight_init.Normal(sigma=0.001), self.classifier.weight.shape, self.classifier.weight.dtype)
-        self.classifier.bias.set_data(weight_init.Zero(), self.classifier.bias.shape, self.classifier.bias.dtype)
+        
+        self.classifier.weight.set_data(
+           weight_init.initializer(weight_init.Normal(sigma=0.001), self.classifier.weight.shape, self.classifier.weight.dtype))
         
         self.avgpool = nn.AvgPool2d((1,1))
         self.wpa = IWPA(pool_dim, part)
