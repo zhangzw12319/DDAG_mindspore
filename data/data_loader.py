@@ -33,8 +33,8 @@ class SYSUDatasetGenerator():
     def __getitem__(self, index):
         # TODO: 这里要配合samplers输出的更改而更改
         img1,  target1 = self.train_color_image[self.cIndex[index]],  self.train_color_label[self.cIndex[index]]
-        img2,  target2 = self.train_thermal_image[self.tIndex[index]], self.train_thermal_label[self.tIndex[index]]
-        
+        img2,  target2 = self.train_thermal_image[self.dex[index]], self.train_thermal_label[self.tIndex[index]]
+    
 
         return img1, img2, target1, target2
 

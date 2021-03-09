@@ -280,7 +280,7 @@ if __name__ == "__main__":
         loss_cb = LossMonitor()
         cb = [loss_cb]
 
-        # model = Model(net, loss_fn=criterion1, optimizer=optimizer_P, metrics=None)
-        # model.train(1, trainset, callbacks=cb)
+        model = Model(net, loss_fn=criterion1, optimizer=optimizer_P, metrics=None)
+        model.train(1, trainset, callbacks=cb)
 
         
