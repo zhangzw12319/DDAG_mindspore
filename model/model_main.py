@@ -135,11 +135,15 @@ class embed_net(nn.Cell):
             
             # return x_pool, self.classifier(feat), self.classifier(feat_att)
             res_feat = self.classifier(feat)
-            res_feat_att = self.classifier(feat_att)
+            if self.lpa:
+                res_feat_att = self.classifier(feat_att)
+                
             print("x_pool is :", x_pool)
             print("res_feat is :", res_feat)
-            print("res_feat_att is", res_feat_att)
-            return self.classifier(feat_att)
+
+            if self.lpa:
+                print("res_feat_att is", res_feat_att)
+            return res_feat
 
         else:
             return self.l2norm(feat), self.l2norm(feat_att)

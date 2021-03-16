@@ -4,6 +4,8 @@
 import os
 import time
 import argparse
+import numpy as np
+import mindspore as ms
 import mindspore.nn as nn
 import mindspore.dataset as ds
 import mindspore.dataset.vision.c_transforms as c_trans
@@ -224,7 +226,7 @@ if __name__ == "__main__":
     # cudnn.benchmark = True
     
     # define loss function
-    criterion1 = nn.SoftmaxCrossEntropyWithLogits()
+    criterion1 = nn.SoftmaxCrossEntropyWithLogits(sparse=True)
     loader_batch = args.batch_size * args.num_pos
     # criterion2 = 
 
@@ -304,10 +306,14 @@ if __name__ == "__main__":
 
 
         for (img1, img2, label1, label2) in dataset_helper:
-            print(img1.shape)
+            print("img1 shape is :", img1.shape)
+            print("label1 is ", label1)
             train_net.set_train()
-            result = train_net(img1, label1)
-            print(result)
+            # label1_np = np.array(label1_list).astype(np.float)
+            label1 = ms.Tensor(label1)
+            loss = train_net(img1, label1)
+            print("loss is :", loss)
+            print("*******************")
 
         # model = Model(net, loss_fn=criterion1, optimizer=optimizer_P, metrics=None)
         # model.train(1, trainset, callbacks=cb)
