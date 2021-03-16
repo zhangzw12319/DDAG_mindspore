@@ -53,7 +53,9 @@ class IdentitySampler(ds.Sampler):
         self.num_samples = N
         
     def __iter__(self):
-        return iter(np.arange(len(self.index1))) 
+        # return iter(np.arange(len(self.index1))) 
+        for i in range(len(self.index1)):
+            yield i
         
     def __len__(self):
         return self.N

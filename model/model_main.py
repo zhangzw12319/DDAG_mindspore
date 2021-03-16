@@ -69,9 +69,9 @@ class base_resnet(nn.Cell):
 
 
 class embed_net(nn.Cell):
-    def __init__(self, low_dim, class_num, drop=0.2, part=3, alpha=0.2, nheads=4, arch="resnet50", wpa=False):
+    def __init__(self, low_dim, class_num=200, drop=0.2, part=3, alpha=0.2, nheads=4, arch="resnet50", wpa=False):
         super(embed_net, self).__init__()
-
+        print("class_num is :", class_num)
         self.thermal_module=thermal_module(arch=arch)
         self.visible_module=visible_module(arch=arch)
         self.base_resnet = base_resnet(arch=arch)
@@ -101,7 +101,7 @@ class embed_net(nn.Cell):
         self.avgpool = nn.AvgPool2d((1,1))
         self.wpa = IWPA(pool_dim, part)
 
-    def forward(self, x1,x2, adj=None, modal=0, cpa = False):
+    def construct(self, x1, x2=None, adj=None, modal=1, cpa = False):
         # domain specific block
         if modal == 0:
             x1 = self.visible_module(x1)
@@ -115,8 +115,11 @@ class embed_net(nn.Cell):
 
         # shared four blocks
         x = self.base_resnet(x)
-        x_pol = self.avgpool(x)
-        x_pool = x_pool.view(x_pool.size(0), x_pool.size(1))
+        print("x.shape is ", x.shape)
+        x_pool = self.avgpool(x)
+        print("x_pool.shape is ", x_pool.shape)
+        x_pool = x_pool.view(x_pool.shape[0], x_pool.shape[1])
+        print("After Reshape:", x_pool.shape)
         feat = self.bottleneck(x_pool)
 
         if self.lpa:
@@ -128,7 +131,13 @@ class embed_net(nn.Cell):
             # TODO: Add cross-modality graph attention mindspore version
             # pass
             
-            return x_pool, self.classifier(feat), self.classifier(feat_att)
+            # return x_pool, self.classifier(feat), self.classifier(feat_att)
+            res_feat = self.classifier(feat)
+            res_feat_att = self.classifier(feat_att)
+            print("x_pool is :", x_pool)
+            print("res_feat is :", res_feat)
+            print("res_feat_att is", res_feat_att)
+            return self.classifier(feat_att)
 
         else:
             return self.l2norm(feat), self.l2norm(feat_att)

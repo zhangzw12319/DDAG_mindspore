@@ -24,6 +24,9 @@ class SYSUDatasetGenerator():
             self.train_thermal_image = np.load(os.path.join(data_dir, 'train_ir_resized_img.npy'))
             self.train_thermal_label = np.load(os.path.join(data_dir,  'train_ir_resized_label.npy'))
 
+        print("Color Igame Size:{}".format(len(self.train_color_image)))
+        print("Color Label Size:{}".format(len(self.train_color_label)))
+
         self.cIndex = colorIndex
         self.tIndex = thermalIndex
 
@@ -32,13 +35,20 @@ class SYSUDatasetGenerator():
 
     def __getitem__(self, index):
         # TODO: 这里要配合samplers输出的更改而更改
+        # print(index)
+        # print("self.cIndex is ",self.cIndex[index] )
+        # print("self.tIndex is ",self.tIndex[index] )
         img1,  target1 = self.train_color_image[self.cIndex[index]],  self.train_color_label[self.cIndex[index]]
-        img2,  target2 = self.train_thermal_image[self.dex[index]], self.train_thermal_label[self.tIndex[index]]
-    
+        img2,  target2 = self.train_thermal_image[self.tIndex[index]], self.train_thermal_label[self.tIndex[index]]
+        # print("img1 is:", img1)
+        # print("target1 is:", target1)
+        # print("img2 is:", img2)
+        # print("target2 is:", target2)
 
-        return img1, img2, target1, target2
+        return (img1, img2, target1, target2)
 
     def __len__(self):
+        # original version
         return len(self.train_color_label)
 
 

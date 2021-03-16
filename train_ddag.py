@@ -8,11 +8,11 @@ import mindspore.nn as nn
 import mindspore.dataset as ds
 import mindspore.dataset.vision.c_transforms as c_trans
 import mindspore.dataset.vision.py_transforms as py_trans
-from mindspore import context, Model, load_checkpoint, load_param_into_net
+from mindspore import context, Model, load_checkpoint, load_param_into_net, DatasetHelper, Tensor
 from mindspore.context import ParallelMode
 from mindspore.dataset.transforms.py_transforms import Compose
 from mindspore.train.callback import LossMonitor
-from mindspore.nn import Momentum
+from mindspore.nn import Momentum, TrainOneStepCell, WithLossCell
 
 from utils.utils import *
 from PIL import Image
@@ -38,11 +38,9 @@ def print_dataset_info(dataset_type, trainset,query_label, gall_label, start_tim
     print('  ------------------------------')
     print('Data Loading Time:\t {:.3f}'.format(time.time() - start_time))
 
-def train():
-    pass
+def decode(img):
+    return Image.fromarray(img)
 
-def test():
-    pass
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="DDAG Code Mindspore Version")
@@ -178,7 +176,7 @@ if __name__ == "__main__":
 
     transform_train = Compose(
         [
-            py_trans.Decode(),
+            decode,
             py_trans.Pad(10),
             py_trans.RandomCrop((args.img_h, args.img_w)),
             py_trans.RandomHorizontalFlip(),
@@ -189,7 +187,7 @@ if __name__ == "__main__":
 
     transform_test = Compose(
         [
-            py_trans.Decode(),
+            decode,
             py_trans.Resize((args.img_h, args.img_w)),
             py_trans.ToTensor(),
             py_trans.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -216,7 +214,11 @@ if __name__ == "__main__":
     n_class = len(np.unique(trainset_generator.train_color_label))
     nquery = len(query_label)
     ngall = len(gall_label)
-    net = embed_net(args.low_dim, n_class, drop=args.drop, part=args.part, arch=args.arch, wpa=args.wpa)
+    net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, arch=args.arch, wpa=args.wpa)
+    # Print network architecture
+    # for m in net.cells_and_names():
+    #     print(m)
+
     # TODO: voncert to mindspore
     # net.to(device) 
     # cudnn.benchmark = True
@@ -264,12 +266,24 @@ if __name__ == "__main__":
         sampler = IdentitySampler(trainset_generator.train_color_label, \
                                 trainset_generator.train_thermal_label, color_pos, thermal_pos, args.num_pos, args.batch_size,
                                 epoch)
+
+        trainset_generator.cIndex = sampler.index1 # color index
+        trainset_generator.tIndex = sampler.index2 # thermal index
+
+        # add sampler(TODO fix bug QWQ)
+        # trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal","color_label", "thermal_label"], sampler=sampler).map(
+        #     operations=transform_train, input_columns=["color", "thermal"]
+        # )
+
+        # remove sampler(although it disagrees with original paper implementation)
         trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal","color_label", "thermal_label"]).map(
-            operations=transform_train, input_columns=["color", "thermal"]
-        )
+            operations=transform_train, input_columns=["color"])
+
+        trainset = trainset.map(operations=transform_train, input_columns=["thermal"])
+
         
-        # trainset.cIndex = sampler.index1  # color index
-        # trainset.tIndex = sampler.index2  # infrared index
+        trainset.cIndex = sampler.index1  # color index
+        trainset.tIndex = sampler.index2  # infrared index
         print(epoch)
         # print(sampler.cIndex)
         # print(sampler.tIndex)
@@ -280,7 +294,25 @@ if __name__ == "__main__":
         loss_cb = LossMonitor()
         cb = [loss_cb]
 
-        model = Model(net, loss_fn=criterion1, optimizer=optimizer_P, metrics=None)
-        model.train(1, trainset, callbacks=cb)
+        trainset = trainset.batch(batch_size=1)
+        dataset_helper = DatasetHelper(trainset, dataset_sink_mode=False)
+        # for inputs in dataset_helper:
+        #     print(*inputs)
+
+        net_with_criterion = WithLossCell(net, criterion1)
+        train_net = TrainOneStepCell(net_with_criterion, optimizer_P)
+        # net = connect_network_with_dataset(net_with_optim, dataset_helper) # only work in GPU/Ascend Mode
+
+
+        for (img1, img2, label1, label2) in dataset_helper:
+            print(img1.shape)
+            train_net.set_train()
+            result = train_net(img1, label1)
+            print(result)
+
+        # model = Model(net, loss_fn=criterion1, optimizer=optimizer_P, metrics=None)
+        # model.train(1, trainset, callbacks=cb)
+
+
 
         
