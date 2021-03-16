@@ -271,9 +271,8 @@ if __name__ == "__main__":
         trainset_generator.tIndex = sampler.index2 # thermal index
 
         # add sampler(TODO fix bug QWQ)
-        # trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal","color_label", "thermal_label"], sampler=sampler).map(
-        #     operations=transform_train, input_columns=["color", "thermal"]
-        # )
+        # trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal","color_label", "thermal_label"], ).map(
+        #     operations=transform_train, input_columns=["color"])
 
         # remove sampler(although it disagrees with original paper implementation)
         trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal","color_label", "thermal_label"]).map(
@@ -294,7 +293,7 @@ if __name__ == "__main__":
         loss_cb = LossMonitor()
         cb = [loss_cb]
 
-        trainset = trainset.batch(batch_size=1)
+        trainset = trainset.batch(batch_size=6)
         dataset_helper = DatasetHelper(trainset, dataset_sink_mode=False)
         # for inputs in dataset_helper:
         #     print(*inputs)

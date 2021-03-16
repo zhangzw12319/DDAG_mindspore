@@ -1,8 +1,12 @@
 import mindspore as ms
 import mindspore.nn as nn
 import numpy as np
+from mindspore import Tensor
 
-pool = nn.AvgPool2d(kernel_size=3)
-x = ms.Tensor(np.random.randint(0, 10,[1, 2, 4, 4]), ms.float32)
-output = pool(x)
-print(output)
+
+net = nn.MatMul()
+input_x1 = Tensor(np.ones(shape=[3, 2, 3]), ms.float32)
+input_x2 = Tensor(np.ones(shape=[2, 3, 4]), ms.float32)
+output = net(input_x1, input_x2)
+print(output.shape)
+

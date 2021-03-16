@@ -2,7 +2,7 @@ import numpy as np
 import mindspore as ms
 import mindspore.nn as nn
 import mindspore.common.initializer as weight_init
-from mindspore.ops import L2Normalize
+from mindspore.ops import L2Normalize, Transpose
 from mindspore.common.initializer import Normal, Constant
 
 
@@ -55,26 +55,27 @@ class IWPA(nn.Cell):
         b = bt // t
 
         # get part features
-        part_feat_pool = nn.AvgPool2d(kernel_size=(part,1))
+        part_feat_pool = nn.AvgPool2d(kernel_size=(6,9), stride=(6,1))
         part_feat = part_feat_pool(x)
         part_feat = part_feat.view(b, t, c, part)
-        part_feat = part_feat.Transpose(0, 2, 1, 3) # B, C, T, Part
+        transpose =  Transpose()
+        part_feat = transpose(part_feat, (0, 2, 1, 3)) # B, C, T, Part
 
         part_feat1 = self.fc1(part_feat).view(b, self.inter_channels, -1) # B, C//r, T*part
-        part_feat1 = part_feat1.Transpose(0, 2, 1) # B, T*part, C//r
+        part_feat1 = transpose(part_feat1, (0, 2, 1)) # B, T*part, C//r
 
         part_feat2 = self.fc2(part_feat).view(b, self.inter_channels, -1) # B, C//r, T*part
-        part_feat2 = part_feat2.Transpose(0, 2, 1) # B, T*part, C//r
 
         part_feat3 = self.fc3(part_feat).view(b, self.inter_channels, -1) # B, C//r, T*part
-        part_feat3 = part_feat3.Transpose(0, 2, 1) # B, T*part, C//r
+        part_feat3 = transpose(part_feat3, (0, 2, 1)) # B, T*part, C//r
 
         # get cross-part attention
-        cpa_att = nn.MatMul(part_feat1, part_feat2) # B, T*part, T*part
+        mat_mul = nn.MatMul()
+        cpa_att = mat_mul(part_feat1, part_feat2) # B, T*part, T*part
         cpa_att = nn.Softmax(cpa_att, axis=-1)
 
         # collect contextual information
-        refined_part_feat = nn.MatMul(cpa_att, part_feat3) # B, T*Part, C//r
+        refined_part_feat = mat_mul(cpa_att, part_feat3) # B, T*Part, C//r
         refined_part_feat = refined_part_feat.Transpose(0, 2, 1) # B, C//r, T*part
         refined_part_feat = refined_part_feat.view(b, self.inter_channels, part) # B, C//r, T, part
 

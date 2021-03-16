@@ -98,7 +98,7 @@ class embed_net(nn.Cell):
         self.classifier.weight.set_data(
            weight_init.initializer(weight_init.Normal(sigma=0.001), self.classifier.weight.shape, self.classifier.weight.dtype))
         
-        self.avgpool = nn.AvgPool2d((1,1))
+        self.avgpool = ops.ReduceMean(keep_dims=True)
         self.wpa = IWPA(pool_dim, part)
 
     def construct(self, x1, x2=None, adj=None, modal=1, cpa = False):
@@ -114,13 +114,15 @@ class embed_net(nn.Cell):
             x = self.thermal_module(x2)
 
         # shared four blocks
+        print("x.shape is ", x.shape)
         x = self.base_resnet(x)
         print("x.shape is ", x.shape)
-        x_pool = self.avgpool(x)
+        x_pool = self.avgpool(x, (2,3))
         print("x_pool.shape is ", x_pool.shape)
         x_pool = x_pool.view(x_pool.shape[0], x_pool.shape[1])
         print("After Reshape:", x_pool.shape)
-        feat = self.bottleneck(x_pool)
+        # feat = self.bottleneck(x_pool) do not support cpu
+        feat = x_pool
 
         if self.lpa:
             # intra_modality weighted part attention
