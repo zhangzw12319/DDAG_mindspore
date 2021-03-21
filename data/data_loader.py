@@ -67,7 +67,7 @@ class TestData():
 
     def __getitem__(self, index):
         img1,  target1 = self.test_image[index],  self.test_label[index]
-        return img1, target1
+        return (img1, target1)
 
     def __len__(self):
         return len(self.test_image)
