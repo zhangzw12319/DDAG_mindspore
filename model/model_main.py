@@ -101,13 +101,13 @@ class embed_net(nn.Cell):
         self.avgpool = ops.ReduceMean(keep_dims=True)
         self.wpa = IWPA(pool_dim, part)
 
-    def construct(self, x1, x2=None, adj=None, modal=1, cpa = False):
+    def construct(self, x1, x2=None, adj=None, modal=1, cpa=False):
         # domain specific block
         if modal == 0:
             x1 = self.visible_module(x1)
             x2 = self.thermal_module(x2)
             cat_op = ops.Concat()
-            x = cat_op((x1, x2), 0)
+            x = cat_op((x1, x2), axis=0)
         elif modal == 1:
             x = self.visible_module(x1)
         elif modal == 2:
@@ -121,8 +121,8 @@ class embed_net(nn.Cell):
         print("x_pool.shape is ", x_pool.shape)
         x_pool = x_pool.view(x_pool.shape[0], x_pool.shape[1])
         print("After Reshape:", x_pool.shape)
-        # feat = self.bottleneck(x_pool) do not support cpu
-        feat = x_pool
+        print("x_pool is :", x_pool)
+        feat = self.bottleneck(x_pool) # do not support cpu
 
         if self.lpa:
             # intra_modality weighted part attention
@@ -130,20 +130,15 @@ class embed_net(nn.Cell):
 
         if self.training:
             # cross-modality graph attention
-            # TODO: Add cross-modality graph attention mindspore version
-            # pass
-            
+            # TODO: Add cross-modality graph attention mindspore version            
             # return x_pool, self.classifier(feat), self.classifier(feat_att)
-            res_feat = self.classifier(feat)
+            
+            out = self.classifier(feat)
+            print("resnet classification output is", out)
             if self.lpa:
-                res_feat_att = self.classifier(feat_att)
-                
-            print("x_pool is :", x_pool)
-            print("res_feat is :", res_feat)
-
-            if self.lpa:
-                print("res_feat_att is", res_feat_att)
-            return res_feat
+                out_att = self.classifier(feat_att)              
+                print("IWPA classification output is", out_att)
+            return feat, feat_att, out, out_att
 
         else:
             return self.l2norm(feat), self.l2norm(feat_att)
