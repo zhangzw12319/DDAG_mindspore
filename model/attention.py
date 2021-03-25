@@ -13,7 +13,9 @@ class IWPA(nn.Cell):
         self.in_channels = in_channels
         self.inter_channels = inter_channels
         self.out_channels = out_channels
+        self.part = part
         self.l2norm = L2Normalize()
+        self.softmax = nn.Softmax(axis=-1)
 
         if self.inter_channels is None:
             self.inter_channels = in_channels
@@ -46,18 +48,18 @@ class IWPA(nn.Cell):
        
 
         # weighting vector of the part features
-        self.gate = ms.Parameter(ms.Tensor(np.ones(part)), name="w", requires_grad=True)
-        self.gate.set_data(weight_init.initializer(Constant(1/part), self.gate.shape, self.gate.dtype))
+        self.gate = ms.Parameter(ms.Tensor(np.ones(self.part)), name="w", requires_grad=True)
+        self.gate.set_data(weight_init.initializer(Constant(1/self.part), self.gate.shape, self.gate.dtype))
 
 
-    def construct(self, x, feat, t=None, part=0): # ? what is t?
+    def construct(self, x, feat, t=None): # ? what is t?
         bt, c, h ,w = x.shape
         b = bt // t
 
         # get part features
         part_feat_pool = nn.AvgPool2d(kernel_size=(6,9), stride=(6,1))
         part_feat = part_feat_pool(x)
-        part_feat = part_feat.view(b, t, c, part)
+        part_feat = part_feat.view(b, t, c, self.part)
         transpose =  Transpose()
         part_feat = transpose(part_feat, (0, 2, 1, 3)) # B, C, T, Part
 
@@ -72,15 +74,18 @@ class IWPA(nn.Cell):
         # get cross-part attention
         mat_mul = nn.MatMul()
         cpa_att = mat_mul(part_feat1, part_feat2) # B, T*part, T*part
-        cpa_att = nn.Softmax(cpa_att, axis=-1)
+        cpa_att = self.softmax(cpa_att)
 
         # collect contextual information
         refined_part_feat = mat_mul(cpa_att, part_feat3) # B, T*Part, C//r
-        refined_part_feat = refined_part_feat.Transpose(0, 2, 1) # B, C//r, T*part
-        refined_part_feat = refined_part_feat.view(b, self.inter_channels, part) # B, C//r, T, part
+        refined_part_feat = transpose(refined_part_feat, (0, 2, 1)) # B, C//r, T*part
+        refined_part_feat = refined_part_feat.view((b, self.inter_channels, self.part)) # B, C//r, T, part
 
-        gate = nn.Softmax(self.gate, axis=-1)
-        weight_part_feat = nn.MatMul(refined_part_feat, gate)
+        # gate = self.softmax(self.gate)
+        # weight_part_feat = nn.MatMul(refined_part_feat, gate)
+        weight_part_feat = mat_mul(refined_part_feat, self.gate)
+        weight_part_feat = weight_part_feat.view((weight_part_feat.shape[0], weight_part_feat.shape[1], 1 ,1))
+        print("weight_part_feat shape is", weight_part_feat.shape)
         
         weight_part_feat = weight_part_feat + feat
         feat = self.bottleneck(weight_part_feat)

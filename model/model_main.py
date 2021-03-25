@@ -69,7 +69,7 @@ class base_resnet(nn.Cell):
 
 
 class embed_net(nn.Cell):
-    def __init__(self, low_dim, class_num=200, drop=0.2, part=3, alpha=0.2, nheads=4, arch="resnet50", wpa=False):
+    def __init__(self, low_dim, class_num=200, drop=0.2, part=0, alpha=0.2, nheads=4, arch="resnet50"):
         super(embed_net, self).__init__()
         print("class_num is :", class_num)
         self.thermal_module=thermal_module(arch=arch)
@@ -77,11 +77,10 @@ class embed_net(nn.Cell):
         self.base_resnet = base_resnet(arch=arch)
         pool_dim = 2048
         self.dropout = drop
-        self.part = part
-        self.lpa = wpa
+        self.part = part 
 
         self.l2norm = Normalize(2)
-        self.bottleneck = nn.BatchNorm1d(pool_dim)
+        self.bottleneck = nn.BatchNorm1d(num_features=pool_dim)
         self.bottleneck.requires_grad=False # Maybe problematic? Original in PyTorch bottleneck.bias.requires_grad(False)
 
         self.classifier = nn.Dense(pool_dim, class_num, has_bias=False)
@@ -99,7 +98,10 @@ class embed_net(nn.Cell):
            weight_init.initializer(weight_init.Normal(sigma=0.001), self.classifier.weight.shape, self.classifier.weight.dtype))
         
         self.avgpool = ops.ReduceMean(keep_dims=True)
-        self.wpa = IWPA(pool_dim, part)
+        if self.part > 0:
+            self.wpa = IWPA(pool_dim, self.part)
+        else:
+            self.wpa = IWPA(pool_dim, 3)
 
     def construct(self, x1, x2=None, adj=None, modal=1, cpa=False):
         # domain specific block
@@ -107,7 +109,7 @@ class embed_net(nn.Cell):
             x1 = self.visible_module(x1)
             x2 = self.thermal_module(x2)
             cat_op = ops.Concat()
-            x = cat_op((x1, x2), axis=0)
+            x = cat_op((x1, x2))
         elif modal == 1:
             x = self.visible_module(x1)
         elif modal == 2:
@@ -122,11 +124,12 @@ class embed_net(nn.Cell):
         x_pool = x_pool.view(x_pool.shape[0], x_pool.shape[1])
         print("After Reshape:", x_pool.shape)
         print("x_pool is :", x_pool)
-        feat = self.bottleneck(x_pool) # do not support cpu
+        # feat = self.bottleneck(x_pool) # do not support cpu
+        feat = x_pool
 
-        if self.lpa:
+        if self.part > 0:
             # intra_modality weighted part attention
-            feat_att = self.wpa(x, feat, 1, self.part) # why t==1?
+            feat_att = self.wpa(x, feat, 1) # why t==1?
 
         if self.training:
             # cross-modality graph attention
@@ -135,10 +138,14 @@ class embed_net(nn.Cell):
             
             out = self.classifier(feat)
             print("resnet classification output is", out)
-            if self.lpa:
+            if self.part > 0:
                 out_att = self.classifier(feat_att)              
                 print("IWPA classification output is", out_att)
-            return feat, feat_att, out, out_att
+
+            if self.part > 0:
+                return feat, feat_att, out, out_att
+            else:
+                return feat, feat, out, out # just for debug
 
         else:
             return self.l2norm(feat), self.l2norm(feat_att)
