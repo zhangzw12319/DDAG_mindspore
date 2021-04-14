@@ -10,8 +10,7 @@ import mindspore.nn as nn
 import mindspore.dataset as ds
 import mindspore.dataset.vision.c_transforms as c_trans
 import mindspore.dataset.vision.py_transforms as py_trans
-# Adapt to Cloud: used for downloading data from OBS to docker on the cloud
-import moxing as mox
+
 
 from mindspore import context, Model, load_checkpoint, load_param_into_net, DatasetHelper, Tensor
 from mindspore.context import ParallelMode
@@ -43,7 +42,7 @@ def get_parser():
                         metavar='B', help='training batch size')
     parser.add_argument('--test-batch', default=64, type=int,
                         metavar='tb', help='testing batch size')
-    parser.add_argument('--num_pos', default=4, type=int,
+    parser.add_argument('--num_pos', default=2, type=int,
                         help='num of pos per identity in each modality')
     parser.add_argument('--trial', default=1, type=int,
                         metavar='t', help='trial (only for RegDB dataset)')
@@ -60,11 +59,10 @@ def get_parser():
     parser.add_argument('--arch', default='resnet50', type=str,
                     help='network baseline:resnet50')
     parser.add_argument('--part', default=3, type=int,
-                        metavar='tb', help=' part number')
+                        metavar='tb', help='part number, either add weighted part attention')
     parser.add_argument('--lambda0', default=1.0, type=float,
                         metavar='lambda0', help='graph attention weights')
     parser.add_argument('--graph', action='store_true', help='either add graph attention or not')
-    parser.add_argument('--wpa', action='store_true', help='either add weighted part attention')
 
     # loss setting
     parser.add_argument('--method', default='id+tri', type=str,
@@ -87,8 +85,10 @@ def get_parser():
                         help='model save path')
     parser.add_argument('--run_distribute', action='store_true', 
                         help="if set true, this code will be run on distrubuted architecture with mindspore")                    
-    parser.add_argument('--debug', action="store_true", 
-                        help='if set true, use a demo dataset for debugging')
+    # parser.add_argument('--debug', action="store_true", 
+    #                     help='if set true, use a demo dataset for debugging')
+    parser.add_argument('--debug', default="", choices=["yes", "no"],
+                            help='if set yes, use a demo dataset for debugging')
     parser.add_argument('--save_epoch', default=20, type=int,
                         metavar='s', help='save model every 10 epochs')
     parser.add_argument('--log_path', default='log/', type=str,
@@ -166,8 +166,11 @@ if __name__ == "__main__":
 
         # Adapt to Huawei Cloud: download data from obs to local location
         if target == "Ascend":
+            # Adapt to Cloud: used for downloading data from OBS to docker on the cloud
+            import moxing as mox
+
             local_data_path = "/cache/data"
-            args.data_dir = local_data_path
+            args.data_path = local_data_path
             print("Download data...")
             mox.file.copy_parallel(src_url=args.data_url, dst_url=local_data_path)
             print("Download complete!(#^.^#)")
@@ -182,7 +185,7 @@ if __name__ == "__main__":
         # TODO: define your data path
         # don't forget add '/' at the end of folder path
         # data_path = './data/SYSU-MM01/'
-        data_path = local_data_path
+        data_path = args.data_path
         # data_path = os.path.join(local_data_path, "SYSU-MM01")
         # log_path
         # test_mode = [1,2] # infrared tp visible
@@ -223,10 +226,11 @@ if __name__ == "__main__":
         ]
     )
     
-
+    ifDebug_dic = {"yes":True, "no":False}
     if dataset_type=="SYSU":
         # train_set
-        trainset_generator = SYSUDatasetGenerator(data_dir=data_path, ifDebug=args.debug)
+        ifDebug = {}
+        trainset_generator = SYSUDatasetGenerator(data_dir=data_path, ifDebug=ifDebug_dic.get(args.debug))
         color_pos, thermal_pos = GenIdx(trainset_generator.train_color_label, trainset_generator.train_thermal_label)
         
         # testing set
@@ -248,7 +252,7 @@ if __name__ == "__main__":
     n_class = len(np.unique(trainset_generator.train_color_label))
     nquery = len(query_label)
     ngall = len(gall_label)
-    net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, arch=args.arch, wpa=args.wpa)
+    net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, arch=args.arch)
     # Print network architecture
     # for m in net.cells_and_names():
     #     print(m)
@@ -269,7 +273,7 @@ if __name__ == "__main__":
     ########################################################################
     if args.optim == 'sgd':
         ignored_params = list(map(id, net.bottleneck.get_parameters())) \
-                        + list(map(id, net.classifier.get_parameters())) \
+                        + list(map(id, net.classifier.get_parameters()))\
                         + list(map(id, net.wpa.get_parameters()))
         base_params = filter(lambda p: id(p) not in ignored_params, net.get_parameters())
 
@@ -333,7 +337,7 @@ if __name__ == "__main__":
         loss_cb = LossMonitor()
         cb = [loss_cb]
 
-        trainset = trainset.batch(batch_size=6)
+        trainset = trainset.batch(batch_size=loader_batch)
         dataset_helper = DatasetHelper(trainset, dataset_sink_mode=False)
         # for inputs in dataset_helper:
         #     print(*inputs)
@@ -347,8 +351,8 @@ if __name__ == "__main__":
             print("img1 shape is :", img1.shape)
             print("label1 is ", label1)
             net_with_optim.set_train()
-            label1 = ms.Tensor(label1)
-            label2 = ms.Tensor(label2)
+            label1 = ms.Tensor(label1, dtype=ms.float32)
+            label2 = ms.Tensor(label2, dtype=ms.float32)
             loss = net_with_optim(img1, img2, label1, label2)
             print("loss is :", loss)
             print("*******************")
