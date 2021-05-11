@@ -48,7 +48,7 @@ class IWPA(nn.Cell):
        
 
         # weighting vector of the part features
-        self.gate = ms.Parameter(ms.Tensor(np.ones(self.part)), name="w", requires_grad=True)
+        self.gate = ms.Parameter(ms.Tensor(np.ones(self.part), dtype=ms.float32), name="w", requires_grad=True)
         self.gate.set_data(weight_init.initializer(Constant(1/self.part), self.gate.shape, self.gate.dtype))
 
 
