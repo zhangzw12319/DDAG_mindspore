@@ -1,8 +1,22 @@
 # Copyright 2021 @Zhangzhiwei
 # Code import from https://github.com/mangye16/DDAG
-
+# only for debug
 import os
+#####################
+# os.environ["PATH"] = "/home/zhangzhiwei/cuda-10.1/bin:/home/zhangzhiwei/anaconda3/envs/mindspore_gpu/bin"\
+#                     + ":/home/zhangzhiwei/anaconda3/condabin:/usr/local/cuda/bin:/usr/local/sbin:"\
+#                     + "/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
+# os.environ["LD_LIBRARY_PATH"] = "/home/zhangzhiwei/cuda-10.1/lib64:/home/zhangzhiwei/cuda-10.1/mylib/lib64" \
+#                             + ":/home/zhangzhiwei/anaconda3/envs/mindspore_gpu/lib/python3.7/site-packages/mindspore:"
+env_list = os.environ
+print(env_list.get("PATH"))
+print(env_list.get("LD_LIBRARY_PATH"))
+#####################
+
+import os.path as osp
+import sys
 import time
+
 import argparse
 import numpy as np
 import mindspore as ms
@@ -17,14 +31,16 @@ from mindspore.context import ParallelMode
 from mindspore.communication.management import init, get_rank, get_group_size
 from mindspore.dataset.transforms.py_transforms import Compose
 from mindspore.train.callback import LossMonitor
-from mindspore.nn import Momentum, TrainOneStepCell, WithLossCell
+from mindspore.nn import SGD, Adam, TrainOneStepCell, WithLossCell
 
 from data.data_loader import SYSUDatasetGenerator
 from data.data_manager import *
 from data.data_loader import *
+from model.eval import test
 from model.model_main import *
 from model.trainingCell import MyWithLossCell
 from utils.utils import *
+from utils.loss import *
 from PIL import Image
 
 
@@ -35,10 +51,10 @@ def get_parser():
                         help='dataset name: RegDB or SYSU')
     parser.add_argument('--data_path',type=str, default=None )
     # Only used on Huawei Cloud OBS service,
-    # when this is set, --data_dir is overrided by local_data_path
+    # when this is set, --data_path is overrided by local_data_path
     parser.add_argument("--data_url", type=str, default=None)
     parser.add_argument("--train_url", type=str, default=None)
-    parser.add_argument('--batch-size', default=4, type=int,
+    parser.add_argument('--batch-size', default=8, type=int,
                         metavar='B', help='training batch size')
     parser.add_argument('--test-batch', default=64, type=int,
                         metavar='tb', help='testing batch size')
@@ -73,10 +89,13 @@ def get_parser():
                         metavar='margin', help='triplet loss margin')
 
     # optimizer and scheduler
-    parser.add_argument("--lr", default=0.1, type=float, help='learning rate, 0.00035 for adam')
-    parser.add_argument('--optim', default='sgd', type=str, help='optimizer')
+    parser.add_argument("--lr", default=0.0035, type=float, help='learning rate, 0.0035 for adam; 0.1 for sgd')
+    parser.add_argument('--optim', default='adam', type=str, help='optimizer')
     
     # training configs
+    parser.add_argument("--Exp", default=0, help="Experiment No. for training")
+    parser.add_argument("--branch-name", default="master",
+                        help="Github branch name, for ablation study tagging")
     parser.add_argument('--resume', '-r', default='', type=str,
                         help='resume from checkpoint')
     parser.add_argument('--pre_trained', type=str, default=None, help='Pretrained resnet-50 checkpoint path')
@@ -104,12 +123,12 @@ def get_parser():
     parser.add_argument('--parameter_server', default=False)
     parser.add_argument('--run_distributed', default=False)
     parser.add_argument('--device_num', default=1)
-    
 
     return parser
 
 
 def print_dataset_info(dataset_type, trainset,query_label, gall_label, start_time):
+    print(trainset.train_color_label)
     n_class = len(np.unique(trainset.train_color_label))
     nquery = len(query_label)
     ngall = len(gall_label)
@@ -137,10 +156,10 @@ if __name__ == "__main__":
     # Init context
     ########################################################################
     # check whether gpu is available 
-    target = args.device_target
-    if target == "CPU":
+    device = args.device_target
+    if device == "CPU":
         args.run_distribute = False
-        context.set_context(mode=context.PYNATIVE_MODE, device_target=target)
+        context.set_context(mode=context.PYNATIVE_MODE, device_target=device)
     else:
         if args.parameter_server:
             context.set_ps_context(enable_ps=True)
@@ -148,7 +167,7 @@ if __name__ == "__main__":
         # distributed running context setting
         if args.run_distribute:
             # Ascend target
-            if target == "Ascend":
+            if device == "Ascend":
                 if args.device_num > 1:
                     # not usefull now, because we only have one Ascend Device
                     pass
@@ -165,7 +184,7 @@ if __name__ == "__main__":
     # end of if args.run_distribute:
 
         # Adapt to Huawei Cloud: download data from obs to local location
-        if target == "Ascend":
+        if device == "Ascend":
             # Adapt to Cloud: used for downloading data from OBS to docker on the cloud
             import moxing as mox
 
@@ -176,25 +195,62 @@ if __name__ == "__main__":
             print("Download complete!(#^.^#)")
             # print(os.listdir(local_data_path))
 
+
+    ########################################################################
+    # Logging
+    ########################################################################
+    if device == "GPU" or device == "CPU":
+        if args.dataset == "SYSU":
+            log_path = osp.join(args.log_path, "sysu_log")
+        elif args.dataset == "RegDB":
+            log_path = osp.join(args.log_path, "regdb_log")
+
+        checkpoint_path = args.model_path
+        if not osp.isdir(log_path):
+            os.makedirs(log_path)
+        if not os.path.isdir(checkpoint_path):
+            os.makedirs(checkpoint_path)
+
+        # if not os.path.isdir(args.vis_log_path):
+        #     os.makedirs(args.vis_log_path)
+
+        suffix = "Exp_" + str(args.Exp) + "_" + str(args.dataset)
+        if args.part > 0:
+            suffix = suffix + '_P_{}'.format(args.part)
+
+        # suffix = suffix + '_drop_{}_{}_{}_lr_{}_seed_{}'.format(args.drop, args.num_pos,
+        # args.batch_size, args.lr, args.seed)
+
+        suffix = suffix + '_batch-size_{}_lr_{}_seed_{}'.format(args.batch_size, args.lr, args.seed)
+        suffix = suffix + '_' + args.optim
+        if args.dataset == 'RegDB':
+            suffix = suffix + '_trial_{}'.format(args.trial)
+
+        suffix = suffix + "_" + args.branch_name
+
+        file_path = osp.join(log_path, suffix)
+        if not osp.isdir(file_path):
+            os.makedirs(file_path)
+
+        test_log_file = open(osp.join(file_path, time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
+                                      + "_performance.txt"), "w")
+        sys.stdout = Logger(osp.join(file_path, time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime()) + "_os.txt"))
+
+
+
     ########################################################################
     # Create Dataset
     ########################################################################
     dataset_type = args.dataset
 
     if dataset_type == "SYSU":
+        # infrared to visible(1->2)
         # TODO: define your data path
-        # don't forget add '/' at the end of folder path
-        # data_path = './data/SYSU-MM01/'
         data_path = args.data_path
-        # data_path = os.path.join(local_data_path, "SYSU-MM01")
-        # log_path
-        # test_mode = [1,2] # infrared tp visible
     elif dataset_type == "RegDB":
+        # visible tu infrared(2->1)
         # TODO: define your data path
-        data_path = "./data/REGDB"
-        # log_path
-        # test_mode = [2,1] # visible tp infared
-
+        data_path = args.data_path
     
     best_acc = 0
     best_acc = 0  # best test accuracy
@@ -226,8 +282,8 @@ if __name__ == "__main__":
         ]
     )
     
-    ifDebug_dic = {"yes":True, "no":False}
-    if dataset_type=="SYSU":
+    ifDebug_dic = {"yes": True, "no": False}
+    if dataset_type == "SYSU":
         # train_set
         ifDebug = {}
         trainset_generator = SYSUDatasetGenerator(data_dir=data_path, ifDebug=ifDebug_dic.get(args.debug))
@@ -237,11 +293,11 @@ if __name__ == "__main__":
         query_img, query_label, query_cam = process_query_sysu(data_path, mode=args.mode)
         gall_img, gall_label, gall_cam = process_gallery_sysu(data_path, mode=args.mode, trial=0)
 
-    else:
+    elif dataset_type == "RegDB":
         pass
 
-    gallset = TestData(gall_img, gall_label, img_size=(args.img_w, args.img_h))
-    queryset = TestData(query_img, query_label, img_size=(args.img_w, args.img_h))
+    gallset_generator = TestData(gall_img, gall_label, img_size=(args.img_w, args.img_h))
+    queryset_generator = TestData(query_img, query_label, img_size=(args.img_w, args.img_h))
 
     print_dataset_info(dataset_type, trainset_generator, query_label, gall_label, start_time)
     
@@ -260,13 +316,15 @@ if __name__ == "__main__":
     # TODO: voncert to mindspore
     # net.to(device) 
     # cudnn.benchmark = True
-    
+
+
     ########################################################################
     # Define loss
     ######################################################################## 
-    criterion1 = nn.SoftmaxCrossEntropyWithLogits(sparse=True)
+    CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True)
     loader_batch = args.batch_size * args.num_pos
-    # criterion2 = 
+    OriTripLossNet = OriTripletLoss(margin=args.margin)
+
 
     ########################################################################
     # Define optimizers & schedulers
@@ -277,7 +335,7 @@ if __name__ == "__main__":
                         + list(map(id, net.wpa.get_parameters()))
         base_params = filter(lambda p: id(p) not in ignored_params, net.get_parameters())
 
-        optimizer_P = Momentum([
+        optimizer_P = SGD([
             {'params': base_params, 'lr': 0.1 * args.lr},
             {'params': net.bottleneck.get_parameters(), 'lr': args.lr},
             {'params': net.classifier.get_parameters(), 'lr': args.lr},
@@ -288,15 +346,26 @@ if __name__ == "__main__":
             # {'params': net.attention_3.parameters(), 'lr': args.lr},
             # {'params': net.out_att.parameters(), 'lr': args.lr} ,
             ],
-            learning_rate=args.lr, weight_decay=5e-4, momentum=0.9)
+            learning_rate=args.lr, weight_decay=5e-4, nesterov=True, momentum=0.9)
 
-    # optimizer_G = optim.SGD([
-    #     {'params': net.attention_0.parameters(), 'lr': args.lr},
-    #     {'params': net.attention_1.parameters(), 'lr': args.lr},
-    #     {'params': net.attention_2.parameters(), 'lr': args.lr},
-    #     {'params': net.attention_3.parameters(), 'lr': args.lr},
-    #     {'params': net.out_att.parameters(), 'lr': args.lr}, ],
-    #     weight_decay=5e-4, momentum=0.9, nesterov=True)    
+    elif args.optim == 'adam':
+        ignored_params = list(map(id, net.bottleneck.get_parameters())) \
+                             + list(map(id, net.classifier.get_parameters())) \
+                             + list(map(id, net.wpa.get_parameters()))
+        base_params = filter(lambda p: id(p) not in ignored_params, net.get_parameters())
+
+        optimizer_P = Adam([
+            {'params': base_params, 'lr': 0.1 * args.lr},
+            {'params': net.bottleneck.get_parameters(), 'lr': args.lr},
+            {'params': net.classifier.get_parameters(), 'lr': args.lr},
+            {'params': net.wpa.get_parameters(), 'lr': args.lr},
+            # {'params': net.attention_0.parameters(), 'lr': args.lr},
+            # {'params': net.attention_1.parameters(), 'lr': args.lr},
+            # {'params': net.attention_2.parameters(), 'lr': args.lr},
+            # {'params': net.attention_3.parameters(), 'lr': args.lr},
+            # {'params': net.out_att.parameters(), 'lr': args.lr} ,
+        ],
+            learning_rate=args.lr, weight_decay=5e-4)
 
 
     ########################################################################
@@ -307,7 +376,7 @@ if __name__ == "__main__":
 
         print('==> Preparing Data Loader...')
         # identity sampler: 
-        sampler = IdentitySampler(trainset_generator.train_color_label, \
+        sampler = IdentitySampler(trainset_generator.train_color_label,
                                 trainset_generator.train_thermal_label, color_pos, thermal_pos, args.num_pos, args.batch_size,
                                 epoch)
 
@@ -315,7 +384,7 @@ if __name__ == "__main__":
         trainset_generator.tIndex = sampler.index2 # thermal index
 
         # add sampler
-        trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal","color_label", "thermal_label"],sampler=sampler).map(
+        trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal", "color_label", "thermal_label"], sampler=sampler).map(
             operations=transform_train, input_columns=["color"])
 
         # remove sampler(although it disagrees with original paper implementation)
@@ -342,24 +411,53 @@ if __name__ == "__main__":
         # for inputs in dataset_helper:
         #     print(*inputs)
 
-        # net_with_criterion = WithLossCell(net, criterion1)
-        net_with_criterion = MyWithLossCell(net, criterion1)
+        net_with_criterion = MyWithLossCell(net, CELossNet, OriTripLossNet )
+
+
         net_with_optim = TrainOneStepCell(net_with_criterion, optimizer_P)
         # train_net = connect_network_with_dataset(net_with_optim, dataset_helper) # only work in GPU/Ascend Mode
 
+        batch_idx = 0
+
         for (img1, img2, label1, label2) in dataset_helper:
-            print("img1 shape is :", img1.shape)
-            print("label1 is ", label1)
-            net_with_optim.set_train()
+            batch_idx += loader_batch
+
+            # print("img1 shape is :", img1.shape)
+            # print("label1 is ", label1)
+            net_with_optim.set_train(mode=True)
             label1 = ms.Tensor(label1, dtype=ms.float32)
             label2 = ms.Tensor(label2, dtype=ms.float32)
             loss = net_with_optim(img1, img2, label1, label2)
-            print("loss is :", loss)
-            print("*******************")
 
-        # model = Model(net, loss_fn=criterion1, optimizer=optimizer_P, metrics=None)
-        # model.train(1, trainset, callbacks=cb)
+            if batch_idx % 10 == 0:
+                print('Epoch: [{}][{}/{}]'
+                      'Loss:{Loss:.2}'
+                      .format(epoch, batch_idx, len(trainset_generator),
+                              Loss=loss.asnumpy(),
+                              ))
 
+        # end of for (img1, img2, label1, label2) in dataset_helper:
 
+        if epoch >= 0:
+            gallset = ds.GeneratorDataset(gallset_generator, ["img", "label"]).map(
+                operations=transform_test, input_columns=["img"])
+            queryset = ds.GeneratorDataset(queryset_generator, ["img", "label"]).map(
+                operations=transform_test, input_columns=["img"]
+            )
 
-        
+            net_with_optim.set_train(mode=False)
+            if args.dataset == "SYSU":
+                cmc, mAP, cmc_att, mAP_att = test(args, gallset, queryset, ngall,
+                      nquery, gall_label, query_label, net, 1, gallery_cam=gall_cam, query_cam=query_cam)
+
+            if args.dataset == "RegDB":
+                cmc, mAP, cmc_att, mAP_att = test(args, gallset, queryset, ngall,
+                      nquery, gall_label, query_label, net, 2)
+
+            print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
+                    cmc[0], cmc[4], cmc[9], cmc[19], mAP), file=test_log_file)
+            if args.part > 0:
+                print('FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
+                    cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att), file=test_log_file)
+
+            test_log_file.flush()

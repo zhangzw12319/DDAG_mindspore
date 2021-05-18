@@ -23,7 +23,7 @@ def process_query_sysu(data_path, mode = 'all', relabel=False):
         for cam in ir_cameras:
             img_dir = os.path.join(data_path,cam,id)
             if os.path.isdir(img_dir):
-                new_files = sorted([img_dir+'/'+i for i in os.listdir(img_dir)])
+                new_files = sorted([img_dir+'/'+i for i in os.listdir(img_dir) if i[0] != '.'])
                 files_ir.extend(new_files)
     query_img = []
     query_id = []
@@ -55,7 +55,7 @@ def process_gallery_sysu(data_path, mode = 'all', trial = 0, relabel=False):
         for cam in rgb_cameras:
             img_dir = os.path.join(data_path,cam,id)
             if os.path.isdir(img_dir):
-                new_files = sorted([img_dir+'/'+i for i in os.listdir(img_dir)])
+                new_files = sorted([img_dir+'/'+i for i in os.listdir(img_dir) if i[0] != '.'])
                 files_rgb.append(random.choice(new_files))
     gall_img = []
     gall_id = []

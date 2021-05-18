@@ -1,5 +1,5 @@
 import mindspore.nn as nn
-import mindspore.ops as ops
+import mindspore.ops as P
 import mindspore.common.initializer as weight_init
 from model.resnet import *
 from model.attention import IWPA
@@ -11,8 +11,14 @@ class Normalize(nn.Cell):
         self.power = power
 
     def construct(self, x):
-        norm = x.pow(self.power).sum(1, keepdim=True).pow(1. / self.power)
-        out = x.div(norm)
+        pow = P.Pow()
+        sum = P.ReduceSum()
+        div = P.Div()
+
+        norm = pow(x, self.power)
+        norm = sum(x)
+        norm = pow(norm, 1. / self.power)
+        out = div(x, norm)
         return out
 
 
@@ -71,9 +77,9 @@ class base_resnet(nn.Cell):
 class embed_net(nn.Cell):
     def __init__(self, low_dim, class_num=200, drop=0.2, part=0, alpha=0.2, nheads=4, arch="resnet50"):
         super(embed_net, self).__init__()
-        print("class_num is :", class_num)
-        self.thermal_module=thermal_module(arch=arch)
-        self.visible_module=visible_module(arch=arch)
+        # print("class_num is :", class_num)
+        self.thermal_module = thermal_module(arch=arch)
+        self.visible_module = visible_module(arch=arch)
         self.base_resnet = base_resnet(arch=arch)
         pool_dim = 2048
         self.dropout = drop
@@ -95,9 +101,10 @@ class embed_net(nn.Cell):
 
         
         self.classifier.weight.set_data(
-           weight_init.initializer(weight_init.Normal(sigma=0.001), self.classifier.weight.shape, self.classifier.weight.dtype))
+           weight_init.initializer(weight_init.Normal(sigma=0.001), \
+           self.classifier.weight.shape, self.classifier.weight.dtype))
         
-        self.avgpool = ops.ReduceMean(keep_dims=True)
+        self.avgpool = P.ReduceMean(keep_dims=True)
         if self.part > 0:
             self.wpa = IWPA(pool_dim, self.part)
         else:
@@ -108,7 +115,7 @@ class embed_net(nn.Cell):
         if modal == 0:
             x1 = self.visible_module(x1)
             x2 = self.thermal_module(x2)
-            cat_op = ops.Concat()
+            cat_op = P.Concat()
             x = cat_op((x1, x2))
         elif modal == 1:
             x = self.visible_module(x1)
@@ -116,14 +123,14 @@ class embed_net(nn.Cell):
             x = self.thermal_module(x2)
 
         # shared four blocks
-        print("x.shape is ", x.shape)
+        # print("x.shape is ", x.shape)
         x = self.base_resnet(x)
-        print("x.shape is ", x.shape)
+        # print("x.shape is ", x.shape)
         x_pool = self.avgpool(x, (2,3))
-        print("x_pool.shape is ", x_pool.shape)
+        # print("x_pool.shape is ", x_pool.shape)
         x_pool = x_pool.view(x_pool.shape[0], x_pool.shape[1])
-        print("After Reshape:", x_pool.shape)
-        print("x_pool is :", x_pool)
+        # print("After Reshape:", x_pool.shape)
+        # print("x_pool is :", x_pool)
         # feat = self.bottleneck(x_pool) # do not support cpu
         feat = x_pool
 
@@ -137,10 +144,10 @@ class embed_net(nn.Cell):
             # return x_pool, self.classifier(feat), self.classifier(feat_att)
             
             out = self.classifier(feat)
-            print("resnet classification output is", out)
+            # print("resnet classification output is", out)
             if self.part > 0:
                 out_att = self.classifier(feat_att)              
-                print("IWPA classification output is", out_att)
+                # print("IWPA classification output is", out_att)
 
             if self.part > 0:
                 return feat, feat_att, out, out_att
@@ -148,7 +155,11 @@ class embed_net(nn.Cell):
                 return feat, feat, out, out # just for debug
 
         else:
-            return self.l2norm(feat), self.l2norm(feat_att)
+            if self.part > 0:
+                return self.l2norm(feat), self.l2norm(feat_att)
+            else:
+                return self.l2norm(feat), self.l2norm(feat) # just for debug
+
 
         
 

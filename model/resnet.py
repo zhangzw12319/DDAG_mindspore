@@ -366,13 +366,15 @@ def resnet50(class_num=10, last_conv_stride=2, last_conv_dilation=1):
 
     strides = [1, 2, 2]
     strides.append(last_conv_stride)
-    return ResNet(ResidualBlock,
+    model = ResNet(ResidualBlock,
                 [3, 4, 6, 3],
                 [64, 256, 512, 1024],
                 [256, 512, 1024, 2048],
                 strides,
                 class_num,
                 last_conv_dilation=last_conv_dilation)
+    # if args.pretrain == TrueXXX 考虑如何转换预训练模型
+    return model
  
 def se_resnet50(class_num=1001):
     """
