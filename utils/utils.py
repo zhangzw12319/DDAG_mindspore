@@ -35,23 +35,23 @@ class IdentitySampler(ds.Sampler):
         super(IdentitySampler, self).__init__()
         uni_label = np.unique(train_color_label)
         self.n_classes = len(uni_label)
-        N = np.maximum(len(train_color_label), len(train_thermal_label)) 
+        N = np.maximum(len(train_color_label), len(train_thermal_label))
         for j in range(int(N/(batchSize*num_pos))+1):
-            batch_idx = np.random.choice(uni_label, batchSize, replace = False)  
+            batch_idx = np.random.choice(uni_label, batchSize, replace=False)
             for i in range(batchSize):
-                sample_color  = np.random.choice(color_pos[batch_idx[i]], num_pos)
+                sample_color = np.random.choice(color_pos[batch_idx[i]], num_pos)
                 sample_thermal = np.random.choice(thermal_pos[batch_idx[i]], num_pos)
                 
-                if j ==0 and i==0:
-                    index1= sample_color
-                    index2= sample_thermal
+                if j == 0 and i == 0:
+                    index1 = sample_color
+                    index2 = sample_thermal
                 else:
                     index1 = np.hstack((index1, sample_color))
                     index2 = np.hstack((index2, sample_thermal))
         
         self.index1 = index1
         self.index2 = index2
-        self.N  = N
+        self.N = N
         self.num_samples = N
         
     def __iter__(self):

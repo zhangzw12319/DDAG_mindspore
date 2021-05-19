@@ -55,10 +55,10 @@ def get_parser():
     parser.add_argument("--data_url", type=str, default=None)
     parser.add_argument("--train_url", type=str, default=None)
     parser.add_argument('--batch-size', default=8, type=int,
-                        metavar='B', help='training batch size')
+                        metavar='B', help='the number of person IDs in a batch')
     parser.add_argument('--test-batch', default=64, type=int,
                         metavar='tb', help='testing batch size')
-    parser.add_argument('--num_pos', default=2, type=int,
+    parser.add_argument('--num_pos', default=4, type=int,
                         help='num of pos per identity in each modality')
     parser.add_argument('--trial', default=1, type=int,
                         metavar='t', help='trial (only for RegDB dataset)')
@@ -96,6 +96,9 @@ def get_parser():
     parser.add_argument("--Exp", default=0, help="Experiment No. for training")
     parser.add_argument("--branch-name", default="master",
                         help="Github branch name, for ablation study tagging")
+    parser.add_argument("--device-id", default=0, type=int, help="Available GPU Device id")
+    parser.add_argument('--device-num', default=1, help="Used in multi-GPU/Ascend training,"
+                                                        " when run_distribute set True")
     parser.add_argument('--resume', '-r', default='', type=str,
                         help='resume from checkpoint')
     parser.add_argument('--pre_trained', type=str, default=None, help='Pretrained resnet-50 checkpoint path')
@@ -121,14 +124,11 @@ def get_parser():
     parser.add_argument('--mode', default='all', type=str, help='all or indoor')
     parser.add_argument('--device_target', default="CPU", choices=["CPU","GPU", "Ascend"])
     parser.add_argument('--parameter_server', default=False)
-    parser.add_argument('--run_distributed', default=False)
-    parser.add_argument('--device_num', default=1)
 
     return parser
 
 
-def print_dataset_info(dataset_type, trainset,query_label, gall_label, start_time):
-    print(trainset.train_color_label)
+def print_dataset_info(dataset_type, trainset, query_label, gall_label, start_time):
     n_class = len(np.unique(trainset.train_color_label))
     nquery = len(query_label)
     ngall = len(gall_label)
@@ -155,12 +155,18 @@ if __name__ == "__main__":
     ########################################################################
     # Init context
     ########################################################################
-    # check whether gpu is available 
+    # TODO check whether gpu is available
     device = args.device_target
+    # init context
+    context.set_context(mode=context.PYNATIVE_MODE, device_target=device, save_graphs=False)
+
     if device == "CPU":
         args.run_distribute = False
         context.set_context(mode=context.PYNATIVE_MODE, device_target=device)
     else:
+        if device == "GPU":
+            context.set_context(device_id=args.device_id)
+
         if args.parameter_server:
             context.set_ps_context(enable_ps=True)
         
@@ -173,6 +179,7 @@ if __name__ == "__main__":
                     pass
             # end of if args.device_num > 1:
                 init()
+
             # GPU target
             else:
                 init()
@@ -180,6 +187,8 @@ if __name__ == "__main__":
                     device_num=get_group_size(), parallel_mode=ParallelMode.DATA_PARALLEL,
                     gradients_mean=True
                 )
+                # mixed precision setting
+                context.set_auto_parallel_context(all_reduce_fusion_config=[85, 160])
         # end of if target="Ascend":
     # end of if args.run_distribute:
 
@@ -232,9 +241,11 @@ if __name__ == "__main__":
         if not osp.isdir(file_path):
             os.makedirs(file_path)
 
-        test_log_file = open(osp.join(file_path, time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
+        time_msg = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
+        test_log_file = open(osp.join(file_path, time_msg
                                       + "_performance.txt"), "w")
-        sys.stdout = Logger(osp.join(file_path, time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime()) + "_os.txt"))
+        error_msg = open(osp.join(file_path, time_msg + "_error_msg.txt"), "w")
+        sys.stdout = Logger(osp.join(file_path, time_msg + "_os.txt"))
 
 
 
@@ -323,7 +334,7 @@ if __name__ == "__main__":
     ######################################################################## 
     CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True)
     loader_batch = args.batch_size * args.num_pos
-    OriTripLossNet = OriTripletLoss(margin=args.margin)
+    OriTripLossNet = OriTripletLoss(margin=args.margin, error_msg=error_msg)
 
 
     ########################################################################
@@ -380,70 +391,81 @@ if __name__ == "__main__":
                                 trainset_generator.train_thermal_label, color_pos, thermal_pos, args.num_pos, args.batch_size,
                                 epoch)
 
-        trainset_generator.cIndex = sampler.index1 # color index
-        trainset_generator.tIndex = sampler.index2 # thermal index
+        trainset_generator.cIndex = sampler.index1  # color index
+        trainset_generator.tIndex = sampler.index2  # thermal index
 
         # add sampler
-        trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal", "color_label", "thermal_label"], sampler=sampler).map(
-            operations=transform_train, input_columns=["color"])
+        trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal", "color_label", "thermal_label"],
+                                       sampler=sampler).map(operations=transform_train, input_columns=["color"])
 
         # remove sampler(although it disagrees with original paper implementation)
         # trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal","color_label", "thermal_label"]).map(
         #     operations=transform_train, input_columns=["color"])
-
         trainset = trainset.map(operations=transform_train, input_columns=["thermal"])
-
         
         trainset.cIndex = sampler.index1  # color index
         trainset.tIndex = sampler.index2  # infrared index
-        print(epoch)
-        # print(sampler.cIndex)
-        # print(sampler.tIndex)
+        print("Epoch [{}]".format(str(epoch)))
 
-        loader_batch = args.batch_size * args.num_pos
+        # only for debugging
+        ############################
+        # print("cIndex")
+        # print(trainset.cIndex)
+        # print(trainset.cIndex.shape)
+        # print("tIndex")
+        # print(trainset.tIndex)
+        # print(trainset.tIndex.shape)
+        ############################
 
         # define callbacks
         loss_cb = LossMonitor()
         cb = [loss_cb]
 
-        trainset = trainset.batch(batch_size=loader_batch)
+        trainset = trainset.batch(batch_size=loader_batch, drop_remainder=False)
         dataset_helper = DatasetHelper(trainset, dataset_sink_mode=False)
         # for inputs in dataset_helper:
         #     print(*inputs)
 
         net_with_criterion = MyWithLossCell(net, CELossNet, OriTripLossNet )
 
-
         net_with_optim = TrainOneStepCell(net_with_criterion, optimizer_P)
         # train_net = connect_network_with_dataset(net_with_optim, dataset_helper) # only work in GPU/Ascend Mode
 
         batch_idx = 0
+        N = np.maximum(len(trainset_generator.train_color_label), len(trainset_generator.train_thermal_label))
+        total_batch = int(N / loader_batch) + 1
+        print("The total number of batch is ->", total_batch)
+
+        # calculate average batch time
+        batch_time = AverageMeter()
+        end_time = time.time()
 
         for (img1, img2, label1, label2) in dataset_helper:
-            batch_idx += loader_batch
-
-            # print("img1 shape is :", img1.shape)
-            # print("label1 is ", label1)
+            batch_idx += 1
+            if batch_idx > 90:
+                print(batch_idx)
             net_with_optim.set_train(mode=True)
             label1 = ms.Tensor(label1, dtype=ms.float32)
             label2 = ms.Tensor(label2, dtype=ms.float32)
             loss = net_with_optim(img1, img2, label1, label2)
 
+            batch_time.update(time.time() - end_time)
+            end_time = time.time()
             if batch_idx % 10 == 0:
-                print('Epoch: [{}][{}/{}]'
-                      'Loss:{Loss:.2}'
-                      .format(epoch, batch_idx, len(trainset_generator),
-                              Loss=loss.asnumpy(),
+                print('Epoch: [{}][{}/{}]   '
+                      'Loss:{Loss:.4f}   '
+                      'Batch Time:{batch_time:.3f}'
+                      .format(epoch, batch_idx, total_batch,
+                              Loss=float(loss.asnumpy()),
+                              batch_time=batch_time.avg,
                               ))
-
         # end of for (img1, img2, label1, label2) in dataset_helper:
 
         if epoch >= 0:
             gallset = ds.GeneratorDataset(gallset_generator, ["img", "label"]).map(
                 operations=transform_test, input_columns=["img"])
             queryset = ds.GeneratorDataset(queryset_generator, ["img", "label"]).map(
-                operations=transform_test, input_columns=["img"]
-            )
+                operations=transform_test, input_columns=["img"])
 
             net_with_optim.set_train(mode=False)
             if args.dataset == "SYSU":
@@ -455,9 +477,17 @@ if __name__ == "__main__":
                       nquery, gall_label, query_label, net, 2)
 
             print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
+                cmc[0], cmc[4], cmc[9], cmc[19], mAP))
+            print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
                     cmc[0], cmc[4], cmc[9], cmc[19], mAP), file=test_log_file)
             if args.part > 0:
+                print(
+                    'FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
+                        cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att))
                 print('FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
                     cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att), file=test_log_file)
+
+            print("*****************************************************************************************")
+            print("*****************************************************************************************", file=test_log_file)
 
             test_log_file.flush()

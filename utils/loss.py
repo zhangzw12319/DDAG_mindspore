@@ -15,9 +15,10 @@ class OriTripletLoss(nn.Cell):
     - margin (float): margin for triplet.
     """
 
-    def __init__(self, margin=0.3):
+    def __init__(self, margin=0.3, error_msg=None):
         super(OriTripletLoss, self).__init__()
         self.margin = margin
+        self.error_msg = error_msg
 
     def ranking_loss(self, input1, input2, y):
         sub = P.Sub()
@@ -93,11 +94,26 @@ class OriTripletLoss(nn.Cell):
             for j in range(n):
                 if mask[i][j] and dist[i][j] > maxval:
                     maxval = dist[i][j]
-            dist_ap.append(maxval.asnumpy())
-
-            for j in range(n):
                 if not mask[i][j] and (dist[i][j] < minval or minval == -1):
                     minval = dist[i][j]
+
+            if(not isinstance(minval, Tensor) or not isinstance(maxval, Tensor)
+                    or minval == -1.0 or maxval == -1.0):
+                if self.error_msg is not None:
+                    print("Error Msg", file=self.error_msg)
+                    print("mask {} is".format(i), file=self.error_msg)
+                    print(mask[i], file=self.error_msg)
+                    print("dist is:", file=self.error_msg)
+                    print(dist[i], file=self.error_msg)
+                    print(maxval, file=self.error_msg)
+                    print(minval, file=self.error_msg)
+                    print(type(maxval), file=self.error_msg)
+                    print(type(minval), file=self.error_msg)
+                    self.error_msg.flush()
+
+            # assert minval != -1.0 and isinstance(minval, Tensor)
+            # assert maxval != -1.0 and isinstance(maxval, Tensor)
+            dist_ap.append(maxval.asnumpy())
             dist_an.append(minval.asnumpy())
 
         dist_ap = Tensor(dist_ap, ms.float32)

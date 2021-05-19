@@ -24,7 +24,7 @@ class SYSUDatasetGenerator():
             self.train_thermal_image = np.load(os.path.join(data_dir, 'train_ir_resized_img.npy'))
             self.train_thermal_label = np.load(os.path.join(data_dir,  'train_ir_resized_label.npy'))
 
-        print("Color Igame Size:{}".format(len(self.train_color_image)))
+        print("Color Image Size:{}".format(len(self.train_color_image)))
         print("Color Label Size:{}".format(len(self.train_color_label)))
 
         self.cIndex = colorIndex
@@ -48,12 +48,13 @@ class SYSUDatasetGenerator():
         return (img1, img2, target1, target2)
 
     def __len__(self):
-        # original version
-        return len(self.train_color_label)
+        # __len__ function will be called in ds.GeneratorDataset()
+        # print("len_cIndex", self.cIndex.shape)
+        return len(self.cIndex)
 
 
 class TestData():
-    def __init__(self, test_img_file, test_label, img_size = (144,288)):
+    def __init__(self, test_img_file, test_label, img_size=(144,288)):
 
         test_image = []
         for i in range(len(test_img_file)):
