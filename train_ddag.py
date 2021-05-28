@@ -1,18 +1,7 @@
 # Copyright 2021 @Zhangzhiwei
+# Cooperative developer @sunhz0117
 # Code import from https://github.com/mangye16/DDAG
-# only for debug
 import os
-#####################
-# os.environ["PATH"] = "/home/zhangzhiwei/cuda-10.1/bin:/home/zhangzhiwei/anaconda3/envs/mindspore_gpu/bin"\
-#                     + ":/home/zhangzhiwei/anaconda3/condabin:/usr/local/cuda/bin:/usr/local/sbin:"\
-#                     + "/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin"
-# os.environ["LD_LIBRARY_PATH"] = "/home/zhangzhiwei/cuda-10.1/lib64:/home/zhangzhiwei/cuda-10.1/mylib/lib64" \
-#                             + ":/home/zhangzhiwei/anaconda3/envs/mindspore_gpu/lib/python3.7/site-packages/mindspore:"
-env_list = os.environ
-print(env_list.get("PATH"))
-print(env_list.get("LD_LIBRARY_PATH"))
-#####################
-
 import os.path as osp
 import sys
 import time
@@ -42,6 +31,7 @@ from model.trainingCell import MyWithLossCell
 from utils.utils import *
 from utils.loss import *
 from PIL import Image
+from IPython import embed
 
 
 def get_parser():
@@ -124,6 +114,7 @@ def get_parser():
     parser.add_argument('--mode', default='all', type=str, help='all or indoor')
     parser.add_argument('--device_target', default="CPU", choices=["CPU","GPU", "Ascend"])
     parser.add_argument('--parameter_server', default=False)
+    parser.add_argument('--gpu', default='0', type=str, help='gpu device ids for CUDA_VISIBLE_DEVICES')
 
     return parser
 
@@ -152,6 +143,9 @@ if __name__ == "__main__":
     parser = get_parser()
     args = parser.parse_args()
 
+    if args.device_target == 'GPU':
+        os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
+
     ########################################################################
     # Init context
     ########################################################################
@@ -161,10 +155,12 @@ if __name__ == "__main__":
     context.set_context(mode=context.PYNATIVE_MODE, device_target=device, save_graphs=False)
 
     if device == "CPU":
+        local_data_path = args.data_path
         args.run_distribute = False
         context.set_context(mode=context.PYNATIVE_MODE, device_target=device)
     else:
         if device == "GPU":
+            local_data_path = args.data_path
             context.set_context(device_id=args.device_id)
 
         if args.parameter_server:
@@ -245,7 +241,7 @@ if __name__ == "__main__":
         test_log_file = open(osp.join(file_path, time_msg
                                       + "_performance.txt"), "w")
         error_msg = open(osp.join(file_path, time_msg + "_error_msg.txt"), "w")
-        sys.stdout = Logger(osp.join(file_path, time_msg + "_os.txt"))
+        # sys.stdout = Logger(osp.join(file_path, time_msg + "_os.txt"))
 
 
 
@@ -335,6 +331,7 @@ if __name__ == "__main__":
     CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True)
     loader_batch = args.batch_size * args.num_pos
     OriTripLossNet = OriTripletLoss(margin=args.margin, error_msg=error_msg)
+    TripLossNet = TripletLoss(margin=args.margin, error_msg=error_msg)
 
 
     ########################################################################
@@ -426,7 +423,7 @@ if __name__ == "__main__":
         # for inputs in dataset_helper:
         #     print(*inputs)
 
-        net_with_criterion = MyWithLossCell(net, CELossNet, OriTripLossNet )
+        net_with_criterion = MyWithLossCell(net, CELossNet, OriTripLossNet)
 
         net_with_optim = TrainOneStepCell(net_with_criterion, optimizer_P)
         # train_net = connect_network_with_dataset(net_with_optim, dataset_helper) # only work in GPU/Ascend Mode
@@ -440,25 +437,24 @@ if __name__ == "__main__":
         batch_time = AverageMeter()
         end_time = time.time()
 
-        for (img1, img2, label1, label2) in dataset_helper:
-            batch_idx += 1
-            if batch_idx > 90:
-                print(batch_idx)
-            net_with_optim.set_train(mode=True)
+        for idx, (img1, img2, label1, label2) in enumerate(dataset_helper):
+            print("batch_idx:", idx)
+            # net_with_optim.set_train(mode=True)
+            net_with_optim.set_train()
             label1 = ms.Tensor(label1, dtype=ms.float32)
             label2 = ms.Tensor(label2, dtype=ms.float32)
             loss = net_with_optim(img1, img2, label1, label2)
 
-            batch_time.update(time.time() - end_time)
-            end_time = time.time()
-            if batch_idx % 10 == 0:
-                print('Epoch: [{}][{}/{}]   '
-                      'Loss:{Loss:.4f}   '
-                      'Batch Time:{batch_time:.3f}'
-                      .format(epoch, batch_idx, total_batch,
-                              Loss=float(loss.asnumpy()),
-                              batch_time=batch_time.avg,
-                              ))
+            # batch_time.update(time.time() - end_time)
+            # end_time = time.time()
+            # if batch_idx % 10 == 0:
+            #     print('Epoch: [{}][{}/{}]   '
+            #           'Loss:{Loss:.4f}   '
+            #           'Batch Time:{batch_time:.3f}'
+            #           .format(epoch, batch_idx, total_batch,
+            #                   Loss=float(loss.asnumpy()),
+            #                   batch_time=batch_time.avg,
+            #                   ))
         # end of for (img1, img2, label1, label2) in dataset_helper:
 
         if epoch >= 0:
@@ -480,6 +476,7 @@ if __name__ == "__main__":
                 cmc[0], cmc[4], cmc[9], cmc[19], mAP))
             print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
                     cmc[0], cmc[4], cmc[9], cmc[19], mAP), file=test_log_file)
+
             if args.part > 0:
                 print(
                     'FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(

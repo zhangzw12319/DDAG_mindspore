@@ -2,6 +2,8 @@ import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as P
 
+from IPython import embed
+
 
 class MyWithLossCell(nn.Cell):
     def __init__(self, backbone, ce_loss, tri_loss):
