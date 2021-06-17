@@ -32,6 +32,7 @@ from utils.utils import *
 from utils.loss import *
 from PIL import Image
 from IPython import embed
+from tqdm import tqdm
 
 
 def get_parser():
@@ -331,7 +332,7 @@ if __name__ == "__main__":
     CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True)
     loader_batch = args.batch_size * args.num_pos
     OriTripLossNet = OriTripletLoss(margin=args.margin, error_msg=error_msg)
-    TripLossNet = TripletLoss(margin=args.margin, error_msg=error_msg)
+    # TripLossNet = TripletLoss(margin=args.margin, error_msg=error_msg)
 
 
     ########################################################################
@@ -437,8 +438,7 @@ if __name__ == "__main__":
         batch_time = AverageMeter()
         end_time = time.time()
 
-        for idx, (img1, img2, label1, label2) in enumerate(dataset_helper):
-            print("batch_idx:", idx)
+        for idx, (img1, img2, label1, label2) in enumerate(tqdm(dataset_helper)):
             # net_with_optim.set_train(mode=True)
             net_with_optim.set_train()
             label1 = ms.Tensor(label1, dtype=ms.float32)

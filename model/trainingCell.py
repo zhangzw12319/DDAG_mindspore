@@ -12,26 +12,28 @@ class MyWithLossCell(nn.Cell):
         self._ce_loss = ce_loss
         self._tri_loss = tri_loss
 
+        self.cat = P.Concat()
+        self.cast = P.Cast()
+        self.sum = P.ReduceSum()
+
     def construct(self, img1, img2, label1, label2, modal=0, cpa=False):
         feat, feat_att, out, out_att = self._backbone(img1, x2=img2, modal=modal, cpa=False)
-        op1 = P.Concat()
-        label = op1((label1,label2))
-        op2 = P.Cast()
-        label_ = op2(label, ms.int32)
+        label = self.cat((label1,label2))
+        label_ = self.cast(label, ms.int32)
 
         loss_id = self._ce_loss(out, label_)
         # loss_id_att = self._ce_loss(out_att, label_)
 
-        sum = P.ReduceSum()
-        loss_id = sum(loss_id) / label_.shape[0]
-
-        # print("loss id is", loss_id)
+        
+        loss_id = self.sum(loss_id) / label_.shape[0]
 
         loss_tri = self._tri_loss(feat, label)
         # loss_tri_att = self._tri_loss(feat_att, label)
-        # print("triplet id is", loss_tri)
+        # print("id: {}, tri: {}\r".format(loss_id, loss_tri), end='')
         
-        return loss_id + loss_tri
+        loss_total = loss_id + loss_tri
+
+        return loss_total
 
     @property
     def backbone_network(self):
