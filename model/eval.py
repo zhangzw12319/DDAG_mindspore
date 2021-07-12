@@ -3,9 +3,20 @@ import mindspore.nn as nn
 import mindspore.ops as P
 import numpy as np
 import time
+import os
+import psutil
 
 from mindspore import DatasetHelper
 
+from IPython import embed
+
+def show_memory_info(hint=""):
+    pid = os.getpid()
+
+    p = psutil.Process(pid)
+    info = p.memory_full_info()
+    memory = info.uss/1024./1024
+    print(f"{hint} memory used: {memory} MB ")
 
 def test(args, gallery, query, ngall, nquery, gall_label, query_label,
          backbone, gall_modal, gallery_cam=None, query_cam=None):

@@ -1,3 +1,5 @@
+import os
+import psutil
 import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as P
@@ -60,6 +62,7 @@ class OriTripletLoss(nn.Cell):
         self.min = P.ReduceMin(keep_dims=True)
         self.cat = P.Concat()
         self.matmul = P.MatMul()
+        self.expand = P.BroadcastTo((64, 64))
 
     def construct(self, inputs, targets):
         """
@@ -69,7 +72,7 @@ class OriTripletLoss(nn.Cell):
         """
 
         bs = inputs.shape[0]
-        self.expand = P.BroadcastTo((bs, bs))
+        
 
         # Compute pairwise distance, replace by the official when merged
         dist = self.pow(inputs, 2)
@@ -87,7 +90,6 @@ class OriTripletLoss(nn.Cell):
         targets = self.expand(targets)
         mask_pos = Tensor(self.equal(targets, self.transpose(targets, (1, 0))), ms.int8)
         mask_neg = Tensor(self.notequal(targets, self.transpose(targets, (1, 0))), ms.int8)
-
         dist_ap = self.max(dist * mask_pos, axis=1).squeeze()
         dist_an = self.min(self.max(dist * mask_neg, axis=1) * mask_pos + dist, axis=1).squeeze()
 

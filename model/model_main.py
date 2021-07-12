@@ -4,6 +4,17 @@ import mindspore.common.initializer as weight_init
 from model.resnet import *
 from model.attention import IWPA
 
+import os
+import psutil
+from IPython import embed
+
+def show_memory_info(hint=""):
+    pid = os.getpid()
+
+    p = psutil.Process(pid)
+    info = p.memory_full_info()
+    memory = info.uss/1024./1024
+    print(f"{hint} memory used: {memory} MB ")
 
 class Normalize(nn.Cell):
     def __init__(self, power=2):
@@ -26,15 +37,16 @@ class visible_module(nn.Cell):
     def __init__(self, arch="resnet50"):
         super(visible_module, self).__init__()
 
-        model_v = resnet50(last_conv_stride=1, last_conv_dilation=1)
-
-        self.visible = model_v
+        # self.visible = resnet50()
+        self.visible = resnet50_specific()
 
     def construct(self, x):
-        x = self.visible.conv1(x)
-        x = self.visible.bn1(x)
-        x = self.visible.relu(x)
-        x = self.visible.maxpool(x)
+        # x = self.visible.conv1(x)
+        # x = self.visible.bn1(x)
+        # x = self.visible.relu(x)
+        # x = self.visible.maxpool(x)
+
+        x = self.visible(x)
 
         return x
 
@@ -42,15 +54,17 @@ class visible_module(nn.Cell):
 class thermal_module(nn.Cell):
     def __init__(self, arch="resnet50"):
         super(thermal_module, self).__init__()
-        
-        model_t = resnet50(last_conv_stride=1, last_conv_dilation=1)
-        self.thermal = model_t
+
+        # self.thermal = resnet50()
+        self.thermal = resnet50_specific()
 
     def construct(self, x):
-        x = self.thermal.conv1(x)
-        x = self.thermal.bn1(x)
-        x = self.thermal.relu(x)
-        x = self.thermal.maxpool(x)
+        # x = self.thermal.conv1(x)
+        # x = self.thermal.bn1(x)
+        # x = self.thermal.relu(x)
+        # x = self.thermal.maxpool(x)
+
+        x = self.thermal(x)
 
         return x
 
@@ -58,20 +72,19 @@ class thermal_module(nn.Cell):
 class base_resnet(nn.Cell):
     def __init__(self, arch="resnet50"):
         super(base_resnet, self).__init__()
-        model_base = resnet50(last_conv_stride=1, last_conv_dilation=1)
-        # avg pooling to global pooling
-        model_base.avgpool = nn.AvgPool2d((1,1))
-        self.base = model_base
+
+        # self.base = resnet50()
+        self.base = resnet50_share()
 
     def construct(self, x):
-        x = self.base.layer1(x)
-        x = self.base.layer2(x)
-        x = self.base.layer3(x)
-        x = self.base.layer4(x)
+        # x = self.base.layer1(x)
+        # x = self.base.layer2(x)
+        # x = self.base.layer3(x)
+        # x = self.base.layer4(x)
+
+        x = self.base(x)
 
         return x
-
-
 
 
 class embed_net(nn.Cell):
@@ -110,13 +123,14 @@ class embed_net(nn.Cell):
         else:
             self.wpa = IWPA(pool_dim, 3)
 
-    def construct(self, x1, x2=None, adj=None, modal=1, cpa=False):
-        # domain specific block
+        self.cat = P.Concat()
+
+    def construct(self, x1, x2=None, adj=None, modal=0, cpa=False):
+        
         if modal == 0:
             x1 = self.visible_module(x1)
             x2 = self.thermal_module(x2)
-            cat_op = P.Concat()
-            x = cat_op((x1, x2))
+            x = self.cat((x1, x2))
         elif modal == 1:
             x = self.visible_module(x1)
         elif modal == 2:
@@ -146,7 +160,7 @@ class embed_net(nn.Cell):
             out = self.classifier(feat)
             # print("resnet classification output is", out)
             if self.part > 0:
-                out_att = self.classifier(feat_att)              
+                out_att = self.classifier(feat_att)
                 # print("IWPA classification output is", out_att)
 
             if self.part > 0:
