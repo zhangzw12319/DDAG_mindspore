@@ -156,6 +156,7 @@ def optim(epoch, backbone_lr_scheduler, head_lr_scheduler):
     # Define optimizers
     ########################################################################
     epoch = ms.Tensor(epoch, ms.int32)
+
     backbone_lr = float(backbone_lr_scheduler(epoch).asnumpy())
     head_lr = float(head_lr_scheduler(epoch).asnumpy())
 

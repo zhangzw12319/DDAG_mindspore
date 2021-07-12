@@ -1,3 +1,4 @@
+from re import S
 import numpy as np
 import mindspore as ms
 import mindspore.nn as nn
@@ -107,7 +108,7 @@ class LR_Scheduler(LearningRateSchedule):
         if global_step < self.warmup_steps:
             warmup_percent = self.cast(self.min(global_step, self.warmup_steps), ms.float32) / self.warmup_steps
             return self.learning_rate * warmup_percent
-        lr = self.learning_rate
+        lr = ms.Tensor(self.learning_rate, ms.float32)
         for decay in self.weight_decay:
             if global_step <= decay: break
             lr = lr * 0.1
