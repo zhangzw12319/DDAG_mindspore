@@ -1,4 +1,7 @@
 import numpy as np
+import mindspore as ms
+import mindspore.nn as nn
+from mindspore import ops as P
 
 
 def _generate_liner_lr(lr_init, lr_end, lr_max, total_steps, warmup_steps):
@@ -51,3 +54,61 @@ def get_lr(lr_init, lr_end, lr_max, warmup_epochs, total_epochs, steps_per_epoch
     lr_each_step = np.array(lr_each_step).astype(np.float32)
     
     return lr_each_step
+    
+
+class LearningRateSchedule(nn.Cell):
+    """Basic class of learning rate schedule."""
+    def __init__(self):
+        super(LearningRateSchedule, self).__init__()
+
+    def construct(self, global_step):
+        """
+        Defines the computation to get the current learning rate.
+
+        This method must be overridden by all subclasses.
+
+        Note:
+            The output must be a Tensor of scalar.
+
+        Inputs:
+            Tensor. The current step number.
+        """
+        raise NotImplementedError
+
+
+class LR_Scheduler(LearningRateSchedule):
+    r"""
+    Gets learning rate warming up + decay.
+
+    Args:
+        learning_rate (float): The initial value of learning rate.
+        warmup_steps (int): The warm up steps of learning rate.
+        weight_decay (int): The weight decay steps of learning rate.
+
+    Inputs:
+        Tensor. The current step number.
+
+    Outputs:
+        Tensor. The learning rate value for the current step.
+
+    Supported Platforms:
+        ``Ascend`` ``GPU``
+
+    """
+    def __init__(self, learning_rate, warmup_steps=0, weight_decay=[]):
+        super(LR_Scheduler, self).__init__()
+        self.warmup_steps = warmup_steps
+        self.learning_rate = learning_rate
+        self.decay = weight_decay
+        self.min = P.Minimum()
+        self.cast = P.Cast()
+
+    def construct(self, global_step):
+        if global_step < self.warmup_steps:
+            warmup_percent = self.cast(self.min(global_step, self.warmup_steps), ms.float32) / self.warmup_steps
+            return self.learning_rate * warmup_percent
+        lr = self.learning_rate
+        for decay in self.weight_decay:
+            if global_step <= decay: break
+            lr = lr * 0.1
+        return lr
