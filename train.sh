@@ -7,4 +7,4 @@ python train_ddag.py \
 --lr 0.0035 \
 --gpu 1 \
 --device_target GPU \
---ckpt test
+--ckpt id
