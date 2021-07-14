@@ -1,3 +1,4 @@
+from re import S
 import numpy as np
 import mindspore as ms
 import mindspore.nn as nn

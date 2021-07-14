@@ -24,6 +24,7 @@ from mindspore.dataset.transforms.py_transforms import Compose
 from mindspore.train.callback import LossMonitor
 from mindspore.train.serialization import load_checkpoint, load_param_into_net
 from mindspore.nn import SGD, Adam, TrainOneStepCell, WithLossCell
+from mindspore.train.dataset_helper import connect_network_with_dataset
 
 from data.data_loader import SYSUDatasetGenerator
 from data.data_manager import *
@@ -95,7 +96,7 @@ def get_parser():
     parser.add_argument('--optim', default='adam', type=str, help='optimizer')
     parser.add_argument("--warmup-steps", default=5, type=int, help='warmup steps')
     
-    # training configs    
+    # training configs
     parser.add_argument("--Exp", default=0, help="Experiment No. for training")
     parser.add_argument("--branch-name", default="master",
                         help="Github branch name, for ablation study tagging")
@@ -369,6 +370,10 @@ if __name__ == "__main__":
     elif dataset_type == "RegDB":
         pass
 
+    ########################################################################
+    # Create Query && Gallery
+    ########################################################################
+
     gallset_generator = TestData(gall_img, gall_label, img_size=(args.img_w, args.img_h), transform=transform_test)
     queryset_generator = TestData(query_img, query_label, img_size=(args.img_w, args.img_h), transform=transform_test)
 
@@ -402,10 +407,6 @@ if __name__ == "__main__":
     # for m in net.cells_and_names():
     #     print(m)
 
-    
-
-
-
     ########################################################################
     # Define loss
     ######################################################################## 
@@ -414,7 +415,7 @@ if __name__ == "__main__":
     OriTripLossNet = OriTripletLoss(margin=args.margin, error_msg=error_msg)
     # TripLossNet = TripletLoss(margin=args.margin, error_msg=error_msg)
 
-    net_with_criterion = MyWithLossCell(net, CELossNet, OriTripLossNet)
+    net_with_criterion = Criterion_with_Net(net, CELossNet, OriTripLossNet)
 
     ########################################################################
     # Define schedulers
@@ -426,7 +427,6 @@ if __name__ == "__main__":
     ########################################################################
     # Start Training
     ########################################################################
-
 
     print('==> Start Training...')
     for epoch in range(start_epoch, 81 - start_epoch):
@@ -462,6 +462,7 @@ if __name__ == "__main__":
         trainset = trainset.batch(batch_size=loader_batch, drop_remainder=True)
 
         dataset_helper = DatasetHelper(trainset, dataset_sink_mode=False)
+        
       
         batch_idx = 0
         N = np.maximum(len(trainset_generator.train_color_label), len(trainset_generator.train_thermal_label))
@@ -501,15 +502,20 @@ if __name__ == "__main__":
         show_memory_info("train: epoch {}".format(epoch))
 
         if epoch >= 0:
-            gallset = ds.GeneratorDataset(gallset_generator, ["img", "label"])
-            gallset = gallset.map(operations=transform_test, input_columns=["img"])
-            queryset = ds.GeneratorDataset(queryset_generator, ["img", "label"])
-            queryset = queryset.map(operations=transform_test, input_columns=["img"])
 
             net_with_optim.set_train(mode=False)
+            gallset = ds.GeneratorDataset(gallset_generator, ["img", "label"])
+            gallset = gallset.map(operations=transform_test, input_columns=["img"])
+            gallery_loader = gallset.batch(batch_size=args.test_batch)
+            gallery_loader = DatasetHelper(gallery_loader, dataset_sink_mode=False)
+
+            queryset = ds.GeneratorDataset(queryset_generator, ["img", "label"])
+            queryset = queryset.map(operations=transform_test, input_columns=["img"])
+            query_loader = queryset.batch(batch_size=args.test_batch)
+            query_loader = DatasetHelper(query_loader, dataset_sink_mode=False)
 
             if args.dataset == "SYSU":
-                cmc, mAP, cmc_att, mAP_att = test(args, gallset, queryset, ngall,
+                cmc, mAP, cmc_att, mAP_att = test(args, gallery_loader, query_loader, ngall,
                     nquery, gall_label, query_label, net, 1, gallery_cam=gall_cam, query_cam=query_cam)
             
             if args.dataset == "RegDB":

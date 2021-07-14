@@ -1,0 +1,1 @@
+python train_ddag.py --dataset SYSU --data_path D:\数据集\sysu\SYSU-MM01 --lr 0.1 --graph --part 0 --debug --device_target CPU

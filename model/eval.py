@@ -23,16 +23,8 @@ def test(args, gallery, query, ngall, nquery, gall_label, query_label,
 
     print('Extracting Gallery Feature...')
     start = time.time()
-    gallery = gallery.batch(batch_size=args.test_batch)
-    gallery = DatasetHelper(gallery, dataset_sink_mode=False)
-
-    # only for debugging
-    #####################
-    # for inputs in gallery:
-    #     print(*inputs)
-    #####################
-
     ptr = 0
+
     gall_feat = np.zeros((ngall, 2048))
     gall_feat_att = np.zeros((ngall, 2048))
     for (img, label) in gallery:
@@ -45,13 +37,12 @@ def test(args, gallery, query, ngall, nquery, gall_label, query_label,
 
     print('Extracting Gallery Feature...')
     start = time.time()
-    query = query.batch(batch_size=args.test_batch)
-    query = DatasetHelper(query, dataset_sink_mode=False)
     ptr = 0
+
     query_feat = np.zeros((nquery, 2048))
     query_feat_att = np.zeros((nquery, 2048))
     for (img, label) in query:
-        feat, feat_att = backbone(None, x2=img, modal=3 - gall_modal)
+        feat, feat_att = backbone(None, x2=img, modal=3-gall_modal)
         size = int(feat.shape[0])
         query_feat[ptr:ptr + size, :] = feat.asnumpy()
         query_feat_att[ptr:ptr + size, :] = feat_att.asnumpy()

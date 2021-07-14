@@ -202,7 +202,6 @@ def resnet50():
     Examples:
         >>> net = resnet50()
     """
-
     return ResNet(ResidualBlock,
                   [3, 4, 6, 3],
                   [64, 256, 512, 1024],
