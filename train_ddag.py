@@ -31,7 +31,7 @@ from data.data_manager import *
 from data.data_loader import *
 from model.eval import test
 from model.model_main import *
-from model.trainingCell import MyWithLossCell
+from model.trainingCell import Criterion_with_Net
 from model.resnet import *
 from utils.utils import *
 from utils.loss import *
@@ -105,7 +105,8 @@ def get_parser():
                                                         " when run_distribute set True")
     parser.add_argument('--resume', '-r', default='', type=str,
                         help='resume from checkpoint')
-    parser.add_argument('--pretrained', type=str, default=None, help='Pretrained resnet-50 checkpoint path')
+    parser.add_argument('--pretrain', type=str, default="pretrain/resnet50_ascend_v111_imagenet2012_official_cv_bs32_acc76/resnet50.ckpt",
+                        help='Pretrain resnet-50 checkpoint path, no pretrain: ""')
     parser.add_argument('--test-only', action='store_true', help='test only')
     parser.add_argument('--model_path', default='save_model/', type=str,
                         help='model save path')
@@ -178,11 +179,6 @@ def optim(epoch, backbone_lr_scheduler, head_lr_scheduler):
             {'params': net.bottleneck.get_parameters(), 'lr': head_lr},
             {'params': net.classifier.get_parameters(), 'lr': head_lr},
             {'params': net.wpa.get_parameters(), 'lr': head_lr},
-            # {'params': net.attention_0.parameters(), 'lr': head_lr},
-            # {'params': net.attention_1.parameters(), 'lr': head_lr},
-            # {'params': net.attention_2.parameters(), 'lr': head_lr},
-            # {'params': net.attention_3.parameters(), 'lr': head_lr},
-            # {'params': net.out_att.parameters(), 'lr': head_lr} ,
             ],
             learning_rate=args.lr, weight_decay=5e-4, nesterov=True, momentum=0.9)
 
@@ -197,11 +193,6 @@ def optim(epoch, backbone_lr_scheduler, head_lr_scheduler):
             {'params': net.bottleneck.get_parameters(), 'lr': head_lr},
             {'params': net.classifier.get_parameters(), 'lr': head_lr},
             {'params': net.wpa.get_parameters(), 'lr': head_lr},
-            # {'params': net.attention_0.parameters(), 'lr': head_lr},
-            # {'params': net.attention_1.parameters(), 'lr': head_lr},
-            # {'params': net.attention_2.parameters(), 'lr': head_lr},
-            # {'params': net.attention_3.parameters(), 'lr': head_lr},
-            # {'params': net.out_att.parameters(), 'lr': head_lr} ,
         ],
             learning_rate=args.lr, weight_decay=5e-4)
 
@@ -308,6 +299,7 @@ if __name__ == "__main__":
         time_msg = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
         test_log_file = open(osp.join(file_path, "performance_{}.txt".format(time_msg)), "w")
         error_msg = open(osp.join(file_path, "error_{}.txt".format(time_msg)), "w")
+        pretrain_file = open(osp.join(file_path, "pretrain_{}.txt".format(time_msg)), "w")
 
 
     ########################################################################
@@ -382,26 +374,21 @@ if __name__ == "__main__":
     ########################################################################
     # Define net
     ######################################################################## 
+    
     # pretrain
-    ifPretrained = False
-    if args.pretrained is not None:
-        ifPretrained = True
-        ckpath = args.pretrained
-        print(ckpath)
-        param_dict = load_checkpoint(ckpath)
-        ckdict_file = open(osp.join(file_path, "ckdict-file.txt"), "w")
-        print(param_dict, file=ckdict_file)
-        ckdict_file.close()
+    print("Pretrain model: {}".format(args.pretrain))
+    print("Pretrain model: {}".format(args.pretrain), file=pretrain_file)
+    if args.pretrain:
+        param_dict = load_checkpoint(args.pretrain)
+        print(param_dict, file=pretrain_file)
+    pretrain_file.close()
 
     print('==> Building model..')
     n_class = len(np.unique(trainset_generator.train_color_label))
     nquery = len(query_label)
     ngall = len(gall_label)
 
-    if ifPretrained:
-        net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, arch=args.arch, ifPretrained=True, pretrainedPath=ckpath)
-    else:
-        net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, arch=args.arch, ifPretrained=False)
+    net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, arch=args.arch, pretrain=args.pretrain)
     
     # Print network architecture
     # for m in net.cells_and_names():

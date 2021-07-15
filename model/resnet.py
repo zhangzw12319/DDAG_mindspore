@@ -194,7 +194,7 @@ class ResNet(nn.Cell):
         c5 = self.layer4(c4)
         return c1, c2, c3, c4, c5
 
-def resnet50():
+def resnet50(pretrain=""):
     """
     Get ResNet50 neural network.
     Returns:
@@ -202,12 +202,17 @@ def resnet50():
     Examples:
         >>> net = resnet50()
     """
-    return ResNet(ResidualBlock,
+    resnet = ResNet(ResidualBlock,
                   [3, 4, 6, 3],
                   [64, 256, 512, 1024],
                   [256, 512, 1024, 2048],
                   [1, 2, 2, 2])
+    
+    if pretrain:
+        param_dict = load_checkpoint(pretrain)
+        load_param_into_net(resnet, param_dict)
 
+    return resnet
 
 class ResNet_Specific(nn.Cell):
     """
@@ -336,7 +341,7 @@ class ResNet_Share(nn.Cell):
         return x
 
 
-def resnet50_share(ifPretrained=False, pretrainedPath=None):
+def resnet50_share(pretrain=""):
     """
     Get ResNet50 neural network.
     Returns:
@@ -350,14 +355,14 @@ def resnet50_share(ifPretrained=False, pretrainedPath=None):
                   [256, 512, 1024, 2048],
                   [1, 2, 2, 2])
     
-    if ifPretrained and pretrainedPath is not None:
-        param_dict = load_checkpoint(pretrainedPath)
+    if pretrain:
+        param_dict = load_checkpoint(pretrain)
         load_param_into_net(resnet, param_dict)
     
     return resnet
     
 
-def resnet50_specific(ifPretrained=False, pretrainedPath=None):
+def resnet50_specific(pretrain=""):
     """
     Get ResNet50 neural network.
     Returns:
@@ -370,8 +375,8 @@ def resnet50_specific(ifPretrained=False, pretrainedPath=None):
                   [64, 256, 512, 1024],
                   [256, 512, 1024, 2048],
                   [1, 2, 2, 2])
-    if ifPretrained and pretrainedPath is not None:
-        param_dict = load_checkpoint(pretrainedPath)
+    if pretrain:
+        param_dict = load_checkpoint(pretrain)
         load_param_into_net(resnet, param_dict)
 
     return resnet

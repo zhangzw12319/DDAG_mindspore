@@ -34,14 +34,12 @@ class Normalize(nn.Cell):
 
 
 class visible_module(nn.Cell):
-    def __init__(self, arch="resnet50", ifPretrained=False, pretrainedPath=None):
+    def __init__(self, arch="resnet50", pretrain=""):
         super(visible_module, self).__init__()
 
-        # self.visible = resnet50()
-        if ifPretrained and pretrainedPath is not None:
-            self.visible = resnet50_specific(ifPretrained=True, pretrainedPath=pretrainedPath)
-        else:
-            self.visible = resnet50_specific()
+        # self.visible = resnet50(pretrain=pretrain)
+        self.visible = resnet50_specific(pretrain=pretrain)
+        
     def construct(self, x):
         # x = self.visible.conv1(x)
         # x = self.visible.bn1(x)
@@ -54,14 +52,11 @@ class visible_module(nn.Cell):
 
 
 class thermal_module(nn.Cell):
-    def __init__(self, arch="resnet50", ifPretrained=False, pretrainedPath=None):
+    def __init__(self, arch="resnet50", pretrain=""):
         super(thermal_module, self).__init__()
 
-        # self.thermal = resnet50()
-        if ifPretrained and pretrainedPath is not None:
-            self.thermal = resnet50_specific(ifPretrained=True, pretrainedPath=pretrainedPath)
-        else:
-            self.thermal = resnet50_specific()
+        # self.thermal = resnet50(pretrain=pretrain)
+        self.thermal = resnet50_specific(pretrain=pretrain)
 
     def construct(self, x):
         # x = self.thermal.conv1(x)
@@ -75,14 +70,11 @@ class thermal_module(nn.Cell):
 
 
 class base_resnet(nn.Cell):
-    def __init__(self, arch="resnet50", ifPretrained=False, pretrainedPath=None):
+    def __init__(self, arch="resnet50", pretrain=""):
         super(base_resnet, self).__init__()
 
-        # self.base = resnet50()
-        if ifPretrained and pretrainedPath is not None:
-            self.base = resnet50_share(ifPretrained=True, pretrainedPath=pretrainedPath)
-        else:
-            self.base = resnet50_share()
+        # self.base = resnet50(pretrain=pretrain)
+        self.base = resnet50_share(pretrain=pretrain)
 
     def construct(self, x):
         # x = self.base.layer1(x)
@@ -97,17 +89,12 @@ class base_resnet(nn.Cell):
 
 class embed_net(nn.Cell):
     def __init__(self, low_dim, class_num=200, drop=0.2, part=0, alpha=0.2, 
-        nheads=4, arch="resnet50", ifPretrained=False, pretrainedPath=None):
+        nheads=4, arch="resnet50", pretrain=""):
         super(embed_net, self).__init__()
         # print("class_num is :", class_num)
-        if ifPretrained:
-            self.thermal_module = thermal_module(arch=arch, ifPretrained=ifPretrained, pretrainedPath=pretrainedPath)
-            self.visible_module = visible_module(arch=arch, ifPretrained=ifPretrained, pretrainedPath=pretrainedPath)
-            self.base_resnet = base_resnet(arch=arch, ifPretrained=ifPretrained, pretrainedPath=pretrainedPath)
-        else:
-            self.thermal_module = thermal_module(arch=arch)
-            self.visible_module = visible_module(arch=arch)
-            self.base_resnet = base_resnet(arch=arch)
+        self.thermal_module = thermal_module(arch=arch, pretrain=pretrain)
+        self.visible_module = visible_module(arch=arch, pretrain=pretrain)
+        self.base_resnet = base_resnet(arch=arch, pretrain=pretrain)
         pool_dim = 2048
         self.dropout = drop
         self.part = part 
