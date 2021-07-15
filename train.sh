@@ -5,6 +5,6 @@ python train_ddag.py \
 --dataset SYSU \
 --optim adam \
 --lr 0.0035 \
---gpu 1 \
+--gpu 2 \
 --device_target GPU \
---ckpt id
+--ckpt id+tri

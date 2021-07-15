@@ -31,7 +31,7 @@ from data.data_manager import *
 from data.data_loader import *
 from model.eval import test
 from model.model_main import *
-from model.trainingCell import Criterion_with_Net
+from model.trainingCell import Criterion_with_Net, Optimizer_with_Net_and_Criterion
 from model.resnet import *
 from utils.utils import *
 from utils.loss import *
@@ -160,39 +160,35 @@ def optim(epoch, backbone_lr_scheduler, head_lr_scheduler):
     ########################################################################
     epoch = ms.Tensor(epoch, ms.int32)
     backbone_lr = float(backbone_lr_scheduler(epoch).asnumpy())
-    ### only for debug ###
-    t = head_lr_scheduler(epoch)
-    print("head_lr is:", t)
-    print("type is:", type(t))
-
-    #####################
     head_lr = float(head_lr_scheduler(epoch).asnumpy())
 
     if args.optim == 'sgd':
-        ignored_params = list(map(id, net.bottleneck.get_parameters())) \
-                        + list(map(id, net.classifier.get_parameters()))\
-                        + list(map(id, net.wpa.get_parameters()))
-        base_params = filter(lambda p: id(p) not in ignored_params, net.get_parameters())
+        ignored_params = list(map(id, net.bottleneck.trainable_params())) \
+                       + list(map(id, net.classifier.trainable_params())) \
+                        # + list(map(id, net.wpa.trainable_params())) \
+
+        base_params = list(filter(lambda p: id(p) not in ignored_params, net.trainable_params()))
 
         optimizer_P = SGD([
             {'params': base_params, 'lr': backbone_lr},
-            {'params': net.bottleneck.get_parameters(), 'lr': head_lr},
-            {'params': net.classifier.get_parameters(), 'lr': head_lr},
-            {'params': net.wpa.get_parameters(), 'lr': head_lr},
+            {'params': net.bottleneck.trainable_params(), 'lr': head_lr},
+            {'params': net.classifier.trainable_params(), 'lr': head_lr},
+            # {'params': net.wpa.trainable_params(), 'lr': head_lr},
             ],
             learning_rate=args.lr, weight_decay=5e-4, nesterov=True, momentum=0.9)
 
     elif args.optim == 'adam':
-        ignored_params = list(map(id, net.bottleneck.get_parameters())) \
-                       + list(map(id, net.classifier.get_parameters())) \
-                       + list(map(id, net.wpa.get_parameters()))
-        base_params = filter(lambda p: id(p) not in ignored_params, net.get_parameters())
+        ignored_params = list(map(id, net.bottleneck.trainable_params())) \
+                       + list(map(id, net.classifier.trainable_params())) \
+                    #    + list(map(id, net.wpa.trainable_params())) \
+
+        base_params = list(filter(lambda p: id(p) not in ignored_params, net.trainable_params()))
 
         optimizer_P = Adam([
             {'params': base_params, 'lr': backbone_lr},
-            {'params': net.bottleneck.get_parameters(), 'lr': head_lr},
-            {'params': net.classifier.get_parameters(), 'lr': head_lr},
-            {'params': net.wpa.get_parameters(), 'lr': head_lr},
+            {'params': net.bottleneck.trainable_params(), 'lr': head_lr},
+            {'params': net.classifier.trainable_params(), 'lr': head_lr},
+            # {'params': net.wpa.trainable_params(), 'lr': head_lr},
         ],
             learning_rate=args.lr, weight_decay=5e-4)
 
@@ -397,7 +393,7 @@ if __name__ == "__main__":
     ########################################################################
     # Define loss
     ######################################################################## 
-    CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True)
+    CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction="mean")
     loader_batch = args.batch_size * args.num_pos
     OriTripLossNet = OriTripletLoss(margin=args.margin, error_msg=error_msg)
     # TripLossNet = TripletLoss(margin=args.margin, error_msg=error_msg)
@@ -419,8 +415,7 @@ if __name__ == "__main__":
     for epoch in range(start_epoch, 81 - start_epoch):
 
         optimizer_P = optim(epoch+1, backbone_lr_scheduler, head_lr_scheduler)
-        net_with_optim = TrainOneStepCell(net_with_criterion, optimizer_P)
-        net_with_optim.set_train(mode=True)
+        net_with_optim = Optimizer_with_Net_and_Criterion(net_with_criterion, optimizer_P)
 
         print('==> Preparing Data Loader...')
         # identity sampler: 
@@ -449,7 +444,9 @@ if __name__ == "__main__":
         trainset = trainset.batch(batch_size=loader_batch, drop_remainder=True)
 
         dataset_helper = DatasetHelper(trainset, dataset_sink_mode=False)
-        
+        # net_with_optim = connect_network_with_dataset(net_with_optim, dataset_helper)
+
+        net.set_train(mode=True)
       
         batch_idx = 0
         N = np.maximum(len(trainset_generator.train_color_label), len(trainset_generator.train_thermal_label))
@@ -471,10 +468,14 @@ if __name__ == "__main__":
                 print('Epoch: [{}][{}/{}]   '
                       'LR: {LR:.4f}   '
                       'Loss:{Loss:.4f}   '
+                    #   'id:{Loss:.4f}   '
+                    #   'tri:{Loss:.4f}   '
                       'Batch Time:{batch_time:.3f}'
                       .format(epoch, batch_idx, total_batch,
                               LR=float(head_lr_scheduler(ms.Tensor(epoch+1, ms.int32)).asnumpy()),
                               Loss=float(loss.asnumpy()),
+                            #   id=float(loss_dict["id"].asnumpy()),
+                            #   tri=float(loss_dict["tri"].asnumpy()),
                               batch_time=batch_time.avg,
                               ))
                 print('Epoch: [{}][{}/{}]   '
@@ -490,7 +491,7 @@ if __name__ == "__main__":
 
         if epoch >= 0:
 
-            net_with_optim.set_train(mode=False)
+            net.set_train(mode=False)
             gallset = ds.GeneratorDataset(gallset_generator, ["img", "label"])
             gallset = gallset.map(operations=transform_test, input_columns=["img"])
             gallery_loader = gallset.batch(batch_size=args.test_batch)

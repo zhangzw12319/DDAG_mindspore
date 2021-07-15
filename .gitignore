@@ -4,4 +4,4 @@ SYSU-MM01
 .gitignore
 train.sh
 cuda_meta_*
-pretrained
+pretrain
