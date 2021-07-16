@@ -31,7 +31,7 @@ from data.data_manager import *
 from data.data_loader import *
 from model.eval import test
 from model.model_main import *
-from model.trainingCell import MyWithLossCell
+from model.trainingCell import Criterion_with_Net
 from model.resnet import *
 from utils.utils import *
 from utils.loss import *
@@ -287,7 +287,7 @@ if __name__ == "__main__":
         #     os.makedirs(args.vis_log_path)
 
         suffix = args.ckpt
-        suffix = suffix + "Exp_" + str(args.Exp) + "_" + str(args.dataset)
+        suffix = suffix + "_Exp_" + str(args.Exp) + "_" + str(args.dataset)
         if args.part > 0:
             suffix = suffix + '_P_{}'.format(args.part)
 
