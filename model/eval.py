@@ -18,7 +18,7 @@ def show_memory_info(hint=""):
     memory = info.uss/1024./1024
     print(f"{hint} memory used: {memory} MB ")
 
-def test(args, gallery, query, ngall, nquery, gall_label, query_label,
+def test(args, gallery, query, ngall, nquery,
          backbone, gall_modal, gallery_cam=None, query_cam=None):
 
     print('Extracting Gallery Feature...')
@@ -27,13 +27,17 @@ def test(args, gallery, query, ngall, nquery, gall_label, query_label,
 
     gall_feat = np.zeros((ngall, 2048))
     gall_feat_att = np.zeros((ngall, 2048))
+    gall_label = np.zeros((ngall,))
+    query_label = np.zeros((nquery,))
     for (img, label) in gallery:
         feat, feat_att = backbone(img, modal=gall_modal)
         size = int(feat.shape[0])
         gall_feat[ptr:ptr + size, : ] = feat.asnumpy()
+        gall_label[ptr:ptr + size] = label.asnumpy()
         gall_feat_att[ptr:ptr + size, : ] = feat_att.asnumpy()
         ptr = ptr + size
     print('Extracting Time:\t {:.3f}'.format(time.time() - start))
+    # print("gallery label:", gall_label)
 
     print('Extracting Gallery Feature...')
     start = time.time()
@@ -45,6 +49,7 @@ def test(args, gallery, query, ngall, nquery, gall_label, query_label,
         feat, feat_att = backbone(None, x2=img, modal=3-gall_modal)
         size = int(feat.shape[0])
         query_feat[ptr:ptr + size, :] = feat.asnumpy()
+        query_label[ptr:ptr + size] = label.asnumpy()
         query_feat_att[ptr:ptr + size, :] = feat_att.asnumpy()
         ptr = ptr + size
     print('Extracting Time:\t {:.3f}'.format(time.time() - start))

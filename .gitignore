@@ -3,3 +3,5 @@ __pycache__
 SYSU-MM01
 .gitignore
 train.sh
+cuda_meta_*
+pretrain

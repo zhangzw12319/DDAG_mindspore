@@ -31,7 +31,7 @@ from data.data_manager import *
 from data.data_loader import *
 from model.eval import test
 from model.model_main import *
-from model.trainingCell import Criterion_with_Net
+from model.trainingCell import Criterion_with_Net, Criterion_with_Net2, Optimizer_with_Net_and_Criterion
 from model.resnet import *
 from utils.utils import *
 from utils.loss import *
@@ -105,7 +105,8 @@ def get_parser():
                                                         " when run_distribute set True")
     parser.add_argument('--resume', '-r', default='', type=str,
                         help='resume from checkpoint')
-    parser.add_argument('--pretrained', type=str, default=None, help='Pretrained resnet-50 checkpoint path')
+    parser.add_argument('--pretrain', type=str, default="pretrain/resnet50_ascend_v111_imagenet2012_official_cv_bs32_acc76/resnet50.ckpt",
+                        help='Pretrain resnet-50 checkpoint path, no pretrain: ""')
     parser.add_argument('--test-only', action='store_true', help='test only')
     parser.add_argument('--model_path', default='save_model/', type=str,
                         help='model save path')
@@ -159,49 +160,35 @@ def optim(epoch, backbone_lr_scheduler, head_lr_scheduler):
     ########################################################################
     epoch = ms.Tensor(epoch, ms.int32)
     backbone_lr = float(backbone_lr_scheduler(epoch).asnumpy())
-    ### only for debug ###
-    t = head_lr_scheduler(epoch)
-    print("head_lr is:", t)
-    print("type is:", type(t))
-
-    #####################
     head_lr = float(head_lr_scheduler(epoch).asnumpy())
 
     if args.optim == 'sgd':
-        ignored_params = list(map(id, net.bottleneck.get_parameters())) \
-                        + list(map(id, net.classifier.get_parameters()))\
-                        + list(map(id, net.wpa.get_parameters()))
-        base_params = filter(lambda p: id(p) not in ignored_params, net.get_parameters())
+        ignored_params = list(map(id, net.bottleneck.trainable_params())) \
+                       + list(map(id, net.classifier.trainable_params())) \
+                        # + list(map(id, net.wpa.trainable_params())) \
+
+        base_params = list(filter(lambda p: id(p) not in ignored_params, net.trainable_params()))
 
         optimizer_P = SGD([
             {'params': base_params, 'lr': backbone_lr},
-            {'params': net.bottleneck.get_parameters(), 'lr': head_lr},
-            {'params': net.classifier.get_parameters(), 'lr': head_lr},
-            {'params': net.wpa.get_parameters(), 'lr': head_lr},
-            # {'params': net.attention_0.parameters(), 'lr': head_lr},
-            # {'params': net.attention_1.parameters(), 'lr': head_lr},
-            # {'params': net.attention_2.parameters(), 'lr': head_lr},
-            # {'params': net.attention_3.parameters(), 'lr': head_lr},
-            # {'params': net.out_att.parameters(), 'lr': head_lr} ,
+            {'params': net.bottleneck.trainable_params(), 'lr': head_lr},
+            {'params': net.classifier.trainable_params(), 'lr': head_lr},
+            # {'params': net.wpa.trainable_params(), 'lr': head_lr},
             ],
             learning_rate=args.lr, weight_decay=5e-4, nesterov=True, momentum=0.9)
 
     elif args.optim == 'adam':
-        ignored_params = list(map(id, net.bottleneck.get_parameters())) \
-                       + list(map(id, net.classifier.get_parameters())) \
-                       + list(map(id, net.wpa.get_parameters()))
-        base_params = filter(lambda p: id(p) not in ignored_params, net.get_parameters())
+        ignored_params = list(map(id, net.bottleneck.trainable_params())) \
+                       + list(map(id, net.classifier.trainable_params())) \
+                    #    + list(map(id, net.wpa.trainable_params())) \
+
+        base_params = list(filter(lambda p: id(p) not in ignored_params, net.trainable_params()))
 
         optimizer_P = Adam([
             {'params': base_params, 'lr': backbone_lr},
-            {'params': net.bottleneck.get_parameters(), 'lr': head_lr},
-            {'params': net.classifier.get_parameters(), 'lr': head_lr},
-            {'params': net.wpa.get_parameters(), 'lr': head_lr},
-            # {'params': net.attention_0.parameters(), 'lr': head_lr},
-            # {'params': net.attention_1.parameters(), 'lr': head_lr},
-            # {'params': net.attention_2.parameters(), 'lr': head_lr},
-            # {'params': net.attention_3.parameters(), 'lr': head_lr},
-            # {'params': net.out_att.parameters(), 'lr': head_lr} ,
+            {'params': net.bottleneck.trainable_params(), 'lr': head_lr},
+            {'params': net.classifier.trainable_params(), 'lr': head_lr},
+            # {'params': net.wpa.trainable_params(), 'lr': head_lr},
         ],
             learning_rate=args.lr, weight_decay=5e-4)
 
@@ -308,6 +295,7 @@ if __name__ == "__main__":
         time_msg = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
         test_log_file = open(osp.join(file_path, "performance_{}.txt".format(time_msg)), "w")
         error_msg = open(osp.join(file_path, "error_{}.txt".format(time_msg)), "w")
+        pretrain_file = open(osp.join(file_path, "pretrain_{}.txt".format(time_msg)), "w")
 
 
     ########################################################################
@@ -382,26 +370,21 @@ if __name__ == "__main__":
     ########################################################################
     # Define net
     ######################################################################## 
+    
     # pretrain
-    ifPretrained = False
-    if args.pretrained is not None:
-        ifPretrained = True
-        ckpath = args.pretrained
-        print(ckpath)
-        param_dict = load_checkpoint(ckpath)
-        ckdict_file = open(osp.join(file_path, "ckdict-file.txt"), "w")
-        print(param_dict, file=ckdict_file)
-        ckdict_file.close()
+    print("Pretrain model: {}".format(args.pretrain))
+    print("Pretrain model: {}".format(args.pretrain), file=pretrain_file)
+    if args.pretrain:
+        param_dict = load_checkpoint(args.pretrain)
+        print(param_dict, file=pretrain_file)
+    pretrain_file.close()
 
     print('==> Building model..')
     n_class = len(np.unique(trainset_generator.train_color_label))
     nquery = len(query_label)
     ngall = len(gall_label)
 
-    if ifPretrained:
-        net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, arch=args.arch, ifPretrained=True, pretrainedPath=ckpath)
-    else:
-        net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, arch=args.arch, ifPretrained=False)
+    net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, arch=args.arch, pretrain=args.pretrain)
     
     # Print network architecture
     # for m in net.cells_and_names():
@@ -410,12 +393,13 @@ if __name__ == "__main__":
     ########################################################################
     # Define loss
     ######################################################################## 
-    CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True)
+    CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction="mean")
     loader_batch = args.batch_size * args.num_pos
     OriTripLossNet = OriTripletLoss(margin=args.margin, error_msg=error_msg)
     # TripLossNet = TripletLoss(margin=args.margin, error_msg=error_msg)
 
     net_with_criterion = Criterion_with_Net(net, CELossNet, OriTripLossNet)
+    net_with_criterion2 = Criterion_with_Net2(net, CELossNet, OriTripLossNet)
 
     ########################################################################
     # Define schedulers
@@ -432,8 +416,7 @@ if __name__ == "__main__":
     for epoch in range(start_epoch, 81 - start_epoch):
 
         optimizer_P = optim(epoch+1, backbone_lr_scheduler, head_lr_scheduler)
-        net_with_optim = TrainOneStepCell(net_with_criterion, optimizer_P)
-        net_with_optim.set_train(mode=True)
+        net_with_optim = Optimizer_with_Net_and_Criterion(net_with_criterion, optimizer_P)
 
         print('==> Preparing Data Loader...')
         # identity sampler: 
@@ -462,7 +445,9 @@ if __name__ == "__main__":
         trainset = trainset.batch(batch_size=loader_batch, drop_remainder=True)
 
         dataset_helper = DatasetHelper(trainset, dataset_sink_mode=False)
-        
+        # net_with_optim = connect_network_with_dataset(net_with_optim, dataset_helper)
+
+        net.set_train(mode=True)
       
         batch_idx = 0
         N = np.maximum(len(trainset_generator.train_color_label), len(trainset_generator.train_thermal_label))
@@ -477,6 +462,9 @@ if __name__ == "__main__":
         for batch_idx, (img1, img2, label1, label2) in enumerate(tqdm(dataset_helper)):
             label1, label2 = ms.Tensor(label1, dtype=ms.float32), ms.Tensor(label2, dtype=ms.float32)
             img1, img2 = ms.Tensor(img1, dtype=ms.float32), ms.Tensor(img2, dtype=ms.float32)
+
+            _, acc = net_with_criterion2(img1, img2, label1, label2)
+
             loss = net_with_optim(img1, img2, label1, label2)
             batch_time.update(time.time() - end_time)
             end_time = time.time()
@@ -484,26 +472,34 @@ if __name__ == "__main__":
                 print('Epoch: [{}][{}/{}]   '
                       'LR: {LR:.4f}   '
                       'Loss:{Loss:.4f}   '
+                    #   'id:{Loss:.4f}   '
+                    #   'tri:{Loss:.4f}   '
                       'Batch Time:{batch_time:.3f}'
+                      'Accuracy:{acc:.4f}'
                       .format(epoch, batch_idx, total_batch,
                               LR=float(head_lr_scheduler(ms.Tensor(epoch+1, ms.int32)).asnumpy()),
                               Loss=float(loss.asnumpy()),
+                            #   id=float(loss_dict["id"].asnumpy()),
+                            #   tri=float(loss_dict["tri"].asnumpy()),
                               batch_time=batch_time.avg,
+                              acc = acc
                               ))
                 print('Epoch: [{}][{}/{}]   '
                       'LR: {LR:.4f}   '
                       'Loss:{Loss:.4f}   '
                       'Batch Time:{batch_time:.3f}'
+                      'Accuracy:{acc:.4f}'
                       .format(epoch, batch_idx, total_batch,
                               LR=float(head_lr_scheduler(ms.Tensor(epoch+1, ms.int32)).asnumpy()),
                               Loss=float(loss.asnumpy()),
                               batch_time=batch_time.avg,
+                              acc = acc
                               ), file=test_log_file)
         show_memory_info("train: epoch {}".format(epoch))
 
         if epoch >= 0:
 
-            net_with_optim.set_train(mode=False)
+            net.set_train(mode=False)
             gallset = ds.GeneratorDataset(gallset_generator, ["img", "label"])
             gallset = gallset.map(operations=transform_test, input_columns=["img"])
             gallery_loader = gallset.batch(batch_size=args.test_batch)
@@ -515,12 +511,14 @@ if __name__ == "__main__":
             query_loader = DatasetHelper(query_loader, dataset_sink_mode=False)
 
             if args.dataset == "SYSU":
+                # import pdb
+                # pdb.set_trace()
                 cmc, mAP, cmc_att, mAP_att = test(args, gallery_loader, query_loader, ngall,
-                    nquery, gall_label, query_label, net, 1, gallery_cam=gall_cam, query_cam=query_cam)
+                    nquery, net, 1, gallery_cam=gall_cam, query_cam=query_cam)
             
             if args.dataset == "RegDB":
                 cmc, mAP, cmc_att, mAP_att = test(args, gallset, queryset, ngall,
-                    nquery, gall_label, query_label, net, 2)
+                    nquery, net, 2)
 
             print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
                 cmc[0], cmc[4], cmc[9], cmc[19], mAP))
