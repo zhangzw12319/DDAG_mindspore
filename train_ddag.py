@@ -296,7 +296,7 @@ if __name__ == "__main__":
 
         suffix = "Exp_" + str(args.Exp) + "_" + str(args.dataset)
         
-        suffix = suffix + '_batch-size_{}*{}={}'.format(args.batch_size, args.num_pos, loader_batch)
+        suffix = suffix + '_batch-size_{}*{}={}'.format(args.batch_size, 2 * args.num_pos, 2 * loader_batch)
         suffix = suffix + '_lr_{}'.format(args.lr)
         suffix = suffix + '_loss-func_{}'.format(args.loss_func)
 
