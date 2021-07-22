@@ -39,7 +39,7 @@ def test(args, gallery, query, ngall, nquery,
     print('Extracting Time:\t {:.3f}'.format(time.time() - start))
     # print("gallery label:", gall_label)
 
-    print('Extracting Gallery Feature...')
+    print('Extracting Query Feature...')
     start = time.time()
     ptr = 0
 

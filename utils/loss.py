@@ -39,7 +39,7 @@ class OriTripletLoss(nn.Cell):
     - margin (float): margin for triplet.
     """
 
-    def __init__(self, margin=0.3, error_msg=None):
+    def __init__(self, margin=0.3, batch_size=64, error_msg=None):
         super(OriTripletLoss, self).__init__()
         self.margin = margin
         self.error_msg = error_msg
@@ -62,7 +62,7 @@ class OriTripletLoss(nn.Cell):
         self.min = P.ReduceMin(keep_dims=True)
         self.cat = P.Concat()
         self.matmul = P.MatMul()
-        self.expand = P.BroadcastTo((64, 64))
+        self.expand = P.BroadcastTo((batch_size, batch_size))
 
     def construct(self, inputs, targets):
         """

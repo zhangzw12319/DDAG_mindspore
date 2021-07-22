@@ -25,7 +25,7 @@ class SYSUDatasetGenerator():
 
             self.train_thermal_image = np.load(os.path.join(data_dir, 'train_ir_resized_img.npy'))
             self.train_thermal_label = np.load(os.path.join(data_dir,  'train_ir_resized_label.npy'))
-
+            
         print("Color Image Size:{}".format(len(self.train_color_image)))
         print("Color Label Size:{}".format(len(self.train_color_label)))
 

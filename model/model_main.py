@@ -148,8 +148,6 @@ class embed_net(nn.Cell):
         self.bottleneck = nn.BatchNorm1d(num_features=pool_dim)
         self.bottleneck.requires_grad=False
         self.classifier = nn.Dense(pool_dim, class_num, has_bias=False)
-        # self.classifier1 = nn.Dense(pool_dim, class_num, has_bias=False)
-        # self.classifier2 = nn.Dense(pool_dim, class_num, has_bias=False)
 
         weights_init_kaiming(self.bottleneck)
         weights_init_classifier(self.classifier)

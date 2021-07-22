@@ -33,6 +33,7 @@ class IdentitySampler(ds.Sampler):
 
     def __init__(self, train_color_label, train_thermal_label, color_pos, thermal_pos, num_pos, batchSize):        
         super(IdentitySampler, self).__init__()
+        # np.random.seed(0)
         uni_label = np.unique(train_color_label)
         self.n_classes = len(uni_label)
         N = np.maximum(len(train_color_label), len(train_thermal_label))

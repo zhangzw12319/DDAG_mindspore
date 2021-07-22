@@ -19,11 +19,13 @@ def show_memory_info(hint=""):
     print(f"{hint} memory used: {memory} MB ")
 
 class Criterion_with_Net(nn.Cell):
-    def __init__(self, backbone, ce_loss, tri_loss):
+    def __init__(self, backbone, ce_loss, tri_loss, lossFunc='id'):
         super(Criterion_with_Net, self).__init__()
         self._backbone = backbone
         self._ce_loss = ce_loss
         self._tri_loss = tri_loss
+        self.lossFunc = lossFunc
+        self.acc = 0
 
         self.cat = P.Concat()
         self.cast = P.Cast()
@@ -44,10 +46,18 @@ class Criterion_with_Net(nn.Cell):
          # ? Que, label for trplet loss should be int32 type or float32? but modify it will cause error, thus may ave bug
         loss_tri = self._tri_loss(feat, label)
         # loss_tri_att = self._tri_loss(feat_att, label)
-        # print("id: {}, tri: {}\r".format(loss_id, loss_tri), end='')
-        # print("id: {}".format(loss_id))
-        loss_total = loss_id
 
+        if self.lossFunc == 'tri': 
+            loss_total = loss_tri
+        elif self.lossFunc == 'id+tri':
+            loss_total = loss_id + loss_tri
+        else:
+            loss_total = loss_id
+   
+        predict , _ = self.max(out)
+        correct = self.eq(predict, label_)
+        self.acc = np.where(correct)[0].shape[0] / label_.shape[0]
+        
         return loss_total
 
     @property
@@ -75,48 +85,3 @@ class Optimizer_with_Net_and_Criterion(nn.Cell):
         # for i in range(len(self.network.trainable_params())):
         #     print(np.sum(self.network.trainable_params()[i].asnumpy()))
         return P.depend(loss, self.optimizer(grads))
-
-
-class Criterion_with_Net2(nn.Cell):
-    def __init__(self, backbone, ce_loss, tri_loss):
-        super(Criterion_with_Net2, self).__init__()
-        self._backbone = backbone
-        self._ce_loss = ce_loss
-        self._tri_loss = tri_loss
-
-        self.cat = P.Concat()
-        self.cast = P.Cast()
-        self.sum = P.ReduceSum()
-        self.max = P.ArgMaxWithValue(axis=1)
-        self.eq = P.Equal()
-
-    def construct(self, img1, img2, label1, label2, modal=0, cpa=False):
-
-        #TODO: out should be renamed as logits, size=batch_size x class_num
-        feat, feat_att, out, out_att = self._backbone(img1, x2=img2, modal=modal, cpa=False) 
-        label = self.cat((label1, label2))
-        label_ = self.cast(label, ms.int32)
-
-        loss_id = self._ce_loss(out, label_)
-        # loss_id_att = self._ce_loss(out_att, label_)
-
-         # ? Que, label for trplet loss should be int32 type or float32? but modify it will cause error, thus may ave bug
-        loss_tri = self._tri_loss(feat, label)
-        # loss_tri_att = self._tri_loss(feat_att, label)
-        # print("id: {}, tri: {}\r".format(loss_id, loss_tri), end='')
-        # print("id: {}".format(loss_id))
-        loss_total = loss_id
-
-        # calculate accuracy
-        # import pdb
-        # pdb.set_trace()
-        predict , _ = self.max(out)
-        correct = self.eq(predict, label_)
-        acc = np.where(correct)[0].shape[0] / label_.shape[0]
-        # print(f"Acc is {acc:.2f}")
-
-        return loss_total, acc
-
-    @property
-    def backbone_network(self):
-        return self._backbone
