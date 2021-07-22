@@ -96,6 +96,8 @@ def get_parser():
 
 
     # loss setting
+    parser.add_argument('--epoch', default=80, type=int,
+                        metavar='epoch', help='epoch num')
     parser.add_argument('--loss-func', default='id+tri', type=str, choices=['id', 'tri', 'id+tri'],
                         metavar='m', help='specify loss fuction type')
     parser.add_argument('--drop', default=0.2, type=float,
@@ -289,9 +291,11 @@ if __name__ == "__main__":
         suffix = suffix + "_" + args.branch_name
 
         time_msg = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-        test_log_file = open(osp.join(checkpoint_path, "{}_performance_{}.txt".format(suffix, time_msg)), "w")
-        error_msg = open(osp.join(checkpoint_path, "{}_error_{}.txt".format(suffix, time_msg)), "w")
+        log_file = open(osp.join(checkpoint_path, "{}_performance_{}.txt".format(suffix, time_msg)), "w")
+        # error_file = open(osp.join(checkpoint_path, "{}_error_{}.txt".format(suffix, time_msg)), "w")
         # pretrain_file = open(osp.join(checkpoint_path, "{}_pretrain_{}.txt".format(suffix, time_msg)), "w")
+        print('Args: {}'.format(args))
+        print('Args: {}'.format(args), file=log_file)
 
 
     ########################################################################
@@ -318,7 +322,7 @@ if __name__ == "__main__":
     print("==> Loading data")
     # Data Loading code
 
-    transform_train = Compose(
+    transform_train_rgb = Compose(
         [
             decode,
             # py_trans.Pad(10),
@@ -330,6 +334,20 @@ if __name__ == "__main__":
             py_trans.RandomErasing(prob=0.5)
         ]
     ) 
+
+    transform_train_ir = Compose(
+        [
+            decode,
+            # py_trans.Pad(10),
+            # py_trans.RandomCrop((args.img_h, args.img_w)),
+            # py_trans.RandomGrayscale(prob=0.5),
+            py_trans.RandomHorizontalFlip(),
+            py_trans.ToTensor(),
+            py_trans.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            py_trans.RandomErasing(prob=0.5)
+        ]
+    ) 
+
 
     transform_test = Compose(
         [
@@ -343,7 +361,7 @@ if __name__ == "__main__":
     ifDebug_dic = {"yes": True, "no": False}
     if dataset_type == "SYSU":
         # train_set
-        trainset_generator = SYSUDatasetGenerator(data_dir=data_path, transform=transform_train, ifDebug=ifDebug_dic.get(args.debug))
+        trainset_generator = SYSUDatasetGenerator(data_dir=data_path, transform_rgb=transform_train_rgb, transform_ir=transform_train_ir,  ifDebug=ifDebug_dic.get(args.debug))
         color_pos, thermal_pos = GenIdx(trainset_generator.train_color_label, trainset_generator.train_thermal_label)
         
         # testing set
@@ -369,10 +387,7 @@ if __name__ == "__main__":
     # pretrain
     if len(args.pretrain) > 0:
         print("Pretrain model: {}".format(args.pretrain))
-        # print("Pretrain model: {}".format(args.pretrain), file=pretrain_file)
-        # param_dict = load_checkpoint(args.pretrain)
-        # print(param_dict, file=pretrain_file)
-    # pretrain_file.close()
+        print("Pretrain model: {}".format(args.pretrain), file=log_file)
 
     print('==> Building model..')
     n_class = len(np.unique(trainset_generator.train_color_label))
@@ -383,15 +398,21 @@ if __name__ == "__main__":
 
     if len(args.resume) > 0:
         print("Resume checkpoint:{}". format(args.resume))
+        print("Resume checkpoint:{}". format(args.resume), file=log_file)
         param_dict = load_checkpoint(args.resume)
         load_param_into_net(net, param_dict)
+        if args.resume.split("/")[-1].split("_")[0] != "best":
+            args.resume = int(args.resume.split("/")[-1].split("_")[1])
+        print("Start epoch: {}".format(args.resume))
+        print("Start epoch: {}".format(args.resume), file=log_file)
+        
 
     ########################################################################
     # Define loss
     ######################################################################## 
     CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction="mean")
-    OriTripLossNet = OriTripletLoss(margin=args.margin, batch_size=2 * loader_batch ,error_msg=error_msg)
-    # TripLossNet = TripletLoss(margin=args.margin, error_msg=error_msg)
+    OriTripLossNet = OriTripletLoss(margin=args.margin, batch_size=2 * loader_batch)
+    # TripLossNet = TripletLoss(margin=args.margin)
 
     net_with_criterion = Criterion_with_Net(net, CELossNet, OriTripLossNet, lossFunc=args.loss_func)
 
@@ -407,9 +428,10 @@ if __name__ == "__main__":
     ########################################################################
 
     print('==> Start Training...')
-    best_mAP = -1.0
-    best_r1 = -1.0
-    for epoch in range(start_epoch, 81):
+    best_mAP = 0.0
+    best_r1 = 0.0
+    best_epoch = 0
+    for epoch in range(start_epoch, args.epoch + 1):
 
         optimizer_P = optim(epoch, backbone_lr_scheduler, head_lr_scheduler)
         net_with_optim = Optimizer_with_Net_and_Criterion(net_with_criterion, optimizer_P)
@@ -426,8 +448,8 @@ if __name__ == "__main__":
         trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal", "color_label", "thermal_label"],
                                        sampler=sampler)
 
-        trainset = trainset.map(operations=transform_train, input_columns=["color"])
-        trainset = trainset.map(operations=transform_train, input_columns=["thermal"])
+        trainset = trainset.map(operations=transform_train_rgb, input_columns=["color"])
+        trainset = trainset.map(operations=transform_train_ir, input_columns=["thermal"])
 
 
         trainset.cIndex = sampler.index1  # color index
@@ -492,7 +514,7 @@ if __name__ == "__main__":
                               Loss=float(loss.asnumpy()),
                               batch_time=batch_time.avg,
                               acc = acc.avg * 100
-                              ), file=test_log_file)
+                              ), file=log_file)
         show_memory_info("train: epoch {}".format(epoch))
 
         if epoch > 0:
@@ -521,32 +543,37 @@ if __name__ == "__main__":
             print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
                 cmc[0], cmc[4], cmc[9], cmc[19], mAP))
             print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
-                cmc[0], cmc[4], cmc[9], cmc[19], mAP), file=test_log_file)
+                cmc[0], cmc[4], cmc[9], cmc[19], mAP), file=log_file)
 
             if args.part > 0:
                 print('FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
                     cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att))
                 print('FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
-                    cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att), file=test_log_file)
-
-            print("*****************************************************************************************")
-            print("*****************************************************************************************", file=test_log_file)
-
-            test_log_file.flush()
+                    cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att), file=log_file)
 
             if mAP > best_mAP:
                 best_mAP = mAP
 
             if cmc[0] > best_r1:
-                path = osp.join(checkpoint_path, f"epoch_{epoch}_rank1_{cmc[0]*100:.2f}_mAP_{mAP*100:.2f}_{suffix}.ckpt")
+                path = osp.join(checkpoint_path, f"epoch_{epoch:02}_rank1_{cmc[0]*100:.2f}_mAP_{mAP*100:.2f}_{suffix}.ckpt")
                 save_checkpoint(net, path)
-                best_r1 = cmc[0]
+                path = osp.join(checkpoint_path, f"best_{suffix}.ckpt")
+                save_checkpoint(net, path)
 
-            test_log_file.flush()
+                best_r1 = cmc[0]
+                best_epoch = epoch
+
+            print('Best(Epoch {}):   Rank-1: {:.2%} | mAP: {:.2%}'.format(best_epoch, best_r1, best_mAP))
+            print('Best(Epoch {}):   Rank-1: {:.2%} | mAP: {:.2%}'.format(best_epoch, best_r1, best_mAP), file=log_file)
+
+            print("*****************************************************************************************")
+            print("*****************************************************************************************", file=log_file)
+
+            log_file.flush()
 
         show_memory_info("test: epoch {}".format(epoch))
 
-    print(f"The best mAP is {best_mAP:.4f}, best rank-1 is {best_r1:.4f}")
-    print(f"The best mAP is {best_mAP:.4f}, best rank-1 is {best_r1:.4f}", file=test_log_file )
-    test_log_file.flush()
-    test_log_file.close()
+    print(f"Best mAP: {best_mAP:.4f}, Best rank-1: {best_r1:.4f}, Best epoch: {best_epoch}(according to Rank-1)")
+    print(f"Best mAP: {best_mAP:.4f}, Best rank-1: {best_r1:.4f}, Best epoch: {best_epoch}(according to Rank-1)", file=log_file)
+    log_file.flush()
+    log_file.close()

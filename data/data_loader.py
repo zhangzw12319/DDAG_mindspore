@@ -10,7 +10,7 @@ from IPython import embed
 class SYSUDatasetGenerator():
     """
     """
-    def __init__(self, data_dir="./data/SYSU-MM01/", transform=None, colorIndex=None, thermalIndex=None, ifDebug=False):
+    def __init__(self, data_dir="./data/sysu/", transform_rgb=None, transform_ir=None, colorIndex=None, thermalIndex=None, ifDebug=False):
 
         # Load training images (path) and labels
         if ifDebug:   
@@ -29,7 +29,8 @@ class SYSUDatasetGenerator():
         print("Color Image Size:{}".format(len(self.train_color_image)))
         print("Color Label Size:{}".format(len(self.train_color_label)))
 
-        self.transform = transform
+        self.transform_rgb = transform_rgb
+        self.transform_ir = transform_ir
         self.cIndex = colorIndex
         self.tIndex = thermalIndex
 
