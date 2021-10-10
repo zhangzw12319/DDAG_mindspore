@@ -56,7 +56,7 @@ def get_parser():
     # dataset settings
     parser.add_argument("--dataset", default='SYSU', choices=['SYSU', 'RegDB'],
                         help='dataset name: RegDB or SYSU')
-    parser.add_argument('--data-path',type=str, default='SYSU-MM01' )
+    parser.add_argument('--data-path',type=str, default='data' )
     # Only used on Huawei Cloud OBS service,
     # when this is set, --data_path is overrided by --data-url
     parser.add_argument("--data-url", type=str, default=None)
@@ -96,6 +96,8 @@ def get_parser():
 
 
     # loss setting
+    parser.add_argument('--epoch', default=80, type=int,
+                        metavar='epoch', help='epoch num')
     parser.add_argument('--loss-func', default='id+tri', type=str, choices=['id', 'tri', 'id+tri'],
                         metavar='m', help='specify loss fuction type')
     parser.add_argument('--drop', default=0.2, type=float,
@@ -109,7 +111,6 @@ def get_parser():
     parser.add_argument('--optim', default='adam', type=str, help='optimizer')
     parser.add_argument("--warmup-steps", default=5, type=int, help='warmup steps')
     
-
     # training configs
     parser.add_argument('--device-target', default="CPU", choices=["CPU","GPU", "Ascend"])
     parser.add_argument('--gpu', default='0', type=str, help='set CUDA_VISIBLE_DEVICES')
@@ -123,10 +124,10 @@ def get_parser():
 
     parser.add_argument('--device-num', default=1, type=int, help='the total number of available gpus')
     parser.add_argument('--resume', '-r', default='', type=str,
-                        help='resume from checkpoint,no resume:"" ')
-    parser.add_argument('--pretrain', type=str, default="pretrain/resnet50_ascend_v111_imagenet2012_official_cv_bs32_acc76/resnet50.ckpt",
+                        help='resume from checkpoint, no resume:""')
+    parser.add_argument('--pretrain', type=str, default="model/pretrain/resnet50_ascend_v111_imagenet2012_official_cv_bs32_acc76/resnet50.ckpt",
                         help='Pretrain resnet-50 checkpoint path, no pretrain: ""')
-    parser.add_argument('--model-path', default='save_checkpoints/', type=str,
+    parser.add_argument('--model-path', default='ckpt/', type=str,
                         help='model checkpoint save path')
     parser.add_argument('--run_distribute', action='store_true', 
                         help="if set true, this code will be run on distrubuted architecture with mindspore")                    
@@ -134,20 +135,12 @@ def get_parser():
     
 
     # logging configs
-    parser.add_argument('--log-path', default='log/', type=str,
-                        help='log save path')
-    parser.add_argument('--vis-log-path', default='log/vis_log_ddag/', type=str,
-                        help='log save path')
-    parser.add_argument("--Exp", default=0, help="Specify experiment No. in training log")
+    parser.add_argument('--ckpt', default='test', type=str, help='ckpt suffix name')
     parser.add_argument("--branch-name", default="master",
                         help="Github branch name, for ablation study tagging")
     
-
     # testing / evaluation config 
     parser.add_argument('--mode', default='all', type=str, help='all or indoor')
-    
-
-    # others
     
     return parser
 
@@ -280,43 +273,29 @@ if __name__ == "__main__":
     loader_batch = args.batch_size * args.num_pos
 
     if device == "GPU" or device == "CPU":
-        if args.dataset == "SYSU":
-            log_path = osp.join(args.log_path, "sysu_log")
-        elif args.dataset == "RegDB":
-            log_path = osp.join(args.log_path, "regdb_log")
+        checkpoint_path = os.path.join("ckpt", args.ckpt)
+        os.makedirs(checkpoint_path, exist_ok=True)
 
-        checkpoint_path = args.model_path
-        if not osp.isdir(log_path):
-            os.makedirs(log_path)
-        if not os.path.isdir(checkpoint_path):
-            os.makedirs(checkpoint_path)
-
-        # if not os.path.isdir(args.vis_log_path):
-        #     os.makedirs(args.vis_log_path)
-
-        suffix = "Exp_" + str(args.Exp) + "_" + str(args.dataset)
+        suffix = args.ckpt + "_" + str(args.dataset)
         
-        suffix = suffix + '_batch-size_{}*{}={}'.format(args.batch_size, 2 * args.num_pos, 2 * loader_batch)
-        suffix = suffix + '_lr_{}'.format(args.lr)
+        suffix = suffix + '_batch-size_2*{}*{}={}'.format(args.batch_size, args.num_pos, 2 * loader_batch)
+        suffix = suffix + '_{}_lr_{}'.format(args.optim, args.lr)
         suffix = suffix + '_loss-func_{}'.format(args.loss_func)
 
         if args.part > 0:
             suffix = suffix + '_P_{}'.format(args.part)
-        suffix = suffix + '_' + args.optim
         
         if args.dataset == 'RegDB':
             suffix = suffix + '_trial_{}'.format(args.trial)
 
         suffix = suffix + "_" + args.branch_name
 
-        file_path = osp.join(log_path, suffix)
-        if not osp.isdir(file_path):
-            os.makedirs(file_path)
-
         time_msg = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-        test_log_file = open(osp.join(file_path, "performance_{}.txt".format(time_msg)), "w")
-        error_msg = open(osp.join(file_path, "error_{}.txt".format(time_msg)), "w")
-        # pretrain_file = open(osp.join(file_path, "pretrain_{}.txt".format(time_msg)), "w")
+        log_file = open(osp.join(checkpoint_path, "{}_performance_{}.txt".format(suffix, time_msg)), "w")
+        # error_file = open(osp.join(checkpoint_path, "{}_error_{}.txt".format(suffix, time_msg)), "w")
+        # pretrain_file = open(osp.join(checkpoint_path, "{}_pretrain_{}.txt".format(suffix, time_msg)), "w")
+        print('Args: {}'.format(args))
+        print('Args: {}'.format(args), file=log_file)
 
 
     ########################################################################
@@ -335,7 +314,7 @@ if __name__ == "__main__":
     
     best_acc = 0
     best_acc = 0  # best test accuracy
-    start_epoch = 0
+    start_epoch = 1
     feature_dim = args.low_dim
     wG = 0
     start_time = time.time()
@@ -343,11 +322,10 @@ if __name__ == "__main__":
     print("==> Loading data")
     # Data Loading code
 
-    transform_train = Compose(
+    transform_train_rgb = Compose(
         [
             decode,
-            # py_trans.ToPIL(),
-            py_trans.Pad(10),
+            # py_trans.Pad(10),
             # py_trans.RandomCrop((args.img_h, args.img_w)),
             py_trans.RandomGrayscale(prob=0.5),
             py_trans.RandomHorizontalFlip(),
@@ -357,10 +335,23 @@ if __name__ == "__main__":
         ]
     ) 
 
+    transform_train_ir = Compose(
+        [
+            decode,
+            # py_trans.Pad(10),
+            # py_trans.RandomCrop((args.img_h, args.img_w)),
+            # py_trans.RandomGrayscale(prob=0.5),
+            py_trans.RandomHorizontalFlip(),
+            py_trans.ToTensor(),
+            py_trans.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            py_trans.RandomErasing(prob=0.5)
+        ]
+    ) 
+
+
     transform_test = Compose(
         [
             decode,
-            # py_trans.ToPIL(),
             py_trans.Resize((args.img_h, args.img_w)),
             py_trans.ToTensor(),
             py_trans.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
@@ -370,7 +361,7 @@ if __name__ == "__main__":
     ifDebug_dic = {"yes": True, "no": False}
     if dataset_type == "SYSU":
         # train_set
-        trainset_generator = SYSUDatasetGenerator(data_dir=data_path, transform=transform_train, ifDebug=ifDebug_dic.get(args.debug))
+        trainset_generator = SYSUDatasetGenerator(data_dir=data_path, transform_rgb=transform_train_rgb, transform_ir=transform_train_ir,  ifDebug=ifDebug_dic.get(args.debug))
         color_pos, thermal_pos = GenIdx(trainset_generator.train_color_label, trainset_generator.train_thermal_label)
         
         # testing set
@@ -396,10 +387,7 @@ if __name__ == "__main__":
     # pretrain
     if len(args.pretrain) > 0:
         print("Pretrain model: {}".format(args.pretrain))
-        # print("Pretrain model: {}".format(args.pretrain), file=pretrain_file)
-        # param_dict = load_checkpoint(args.pretrain)
-        # print(param_dict, file=pretrain_file)
-    # pretrain_file.close()
+        print("Pretrain model: {}".format(args.pretrain), file=log_file)
 
     print('==> Building model..')
     n_class = len(np.unique(trainset_generator.train_color_label))
@@ -410,15 +398,21 @@ if __name__ == "__main__":
 
     if len(args.resume) > 0:
         print("Resume checkpoint:{}". format(args.resume))
+        print("Resume checkpoint:{}". format(args.resume), file=log_file)
         param_dict = load_checkpoint(args.resume)
         load_param_into_net(net, param_dict)
+        if args.resume.split("/")[-1].split("_")[0] != "best":
+            args.resume = int(args.resume.split("/")[-1].split("_")[1])
+        print("Start epoch: {}".format(args.resume))
+        print("Start epoch: {}".format(args.resume), file=log_file)
+        
 
     ########################################################################
     # Define loss
     ######################################################################## 
     CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction="mean")
-    OriTripLossNet = OriTripletLoss(margin=args.margin, batch_size=2 * loader_batch ,error_msg=error_msg)
-    # TripLossNet = TripletLoss(margin=args.margin, error_msg=error_msg)
+    OriTripLossNet = OriTripletLoss(margin=args.margin, batch_size=2 * loader_batch)
+    # TripLossNet = TripletLoss(margin=args.margin)
 
     net_with_criterion = Criterion_with_Net(net, CELossNet, OriTripLossNet, lossFunc=args.loss_func)
 
@@ -434,11 +428,12 @@ if __name__ == "__main__":
     ########################################################################
 
     print('==> Start Training...')
-    best_mAP = -1.0
-    best_r1 = -1.0
-    for epoch in range(start_epoch, 81 - start_epoch):
+    best_mAP = 0.0
+    best_r1 = 0.0
+    best_epoch = 0
+    for epoch in range(start_epoch, args.epoch + 1):
 
-        optimizer_P = optim(epoch+1, backbone_lr_scheduler, head_lr_scheduler)
+        optimizer_P = optim(epoch, backbone_lr_scheduler, head_lr_scheduler)
         net_with_optim = Optimizer_with_Net_and_Criterion(net_with_criterion, optimizer_P)
 
         print('==> Preparing Data Loader...')
@@ -453,8 +448,8 @@ if __name__ == "__main__":
         trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal", "color_label", "thermal_label"],
                                        sampler=sampler)
 
-        trainset = trainset.map(operations=transform_train, input_columns=["color"])
-        trainset = trainset.map(operations=transform_train, input_columns=["thermal"])
+        trainset = trainset.map(operations=transform_train_rgb, input_columns=["color"])
+        trainset = trainset.map(operations=transform_train_ir, input_columns=["thermal"])
 
 
         trainset.cIndex = sampler.index1  # color index
@@ -499,15 +494,15 @@ if __name__ == "__main__":
                       'Loss:{Loss:.4f}   '
                     #   'id:{Loss:.4f}   '
                     #   'tri:{Loss:.4f}   '
-                      'Batch Time:{batch_time:.3f}  '
-                      'Accuracy:{acc:.4f}   '
+                      'Batch Time:{batch_time:.2f}  '
+                      'Accuracy:{acc:.2f}   '
                       .format(epoch, batch_idx, total_batch,
-                              LR=float(head_lr_scheduler(ms.Tensor(epoch+1, ms.int32)).asnumpy()),
+                              LR=float(head_lr_scheduler(ms.Tensor(epoch, ms.int32)).asnumpy()),
                               Loss=float(loss.asnumpy()),
                             #   id=float(loss_dict["id"].asnumpy()),
                             #   tri=float(loss_dict["tri"].asnumpy()),
                               batch_time=batch_time.avg,
-                              acc = acc.avg
+                              acc = acc.avg * 100
                               ))
                 print('Epoch: [{}][{}/{}]   '
                       'LR: {LR:.4f}   '
@@ -515,14 +510,14 @@ if __name__ == "__main__":
                       'Batch Time:{batch_time:.3f}  '
                       'Accuracy:{acc:.4f}   '
                       .format(epoch, batch_idx, total_batch,
-                              LR=float(head_lr_scheduler(ms.Tensor(epoch+1, ms.int32)).asnumpy()),
+                              LR=float(head_lr_scheduler(ms.Tensor(epoch, ms.int32)).asnumpy()),
                               Loss=float(loss.asnumpy()),
                               batch_time=batch_time.avg,
-                              acc = acc.avg
-                              ), file=test_log_file)
+                              acc = acc.avg * 100
+                              ), file=log_file)
         show_memory_info("train: epoch {}".format(epoch))
 
-        if epoch >= 0:
+        if epoch > 0:
 
             net.set_train(mode=False)
             gallset = ds.GeneratorDataset(gallset_generator, ["img", "label"])
@@ -548,32 +543,37 @@ if __name__ == "__main__":
             print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
                 cmc[0], cmc[4], cmc[9], cmc[19], mAP))
             print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
-                cmc[0], cmc[4], cmc[9], cmc[19], mAP), file=test_log_file)
+                cmc[0], cmc[4], cmc[9], cmc[19], mAP), file=log_file)
 
             if args.part > 0:
                 print('FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
                     cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att))
                 print('FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
-                    cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att), file=test_log_file)
+                    cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att), file=log_file)
 
-            print("*****************************************************************************************")
-            print("*****************************************************************************************", file=test_log_file)
-
-            test_log_file.flush()
-
-            if mAP > best_mAP: 
-                path = osp.join(checkpoint_path, f"mAP_{mAP:.4f}_rank1_{cmc[0]:.4f}_{suffix}.ckpt")
-                save_checkpoint(net, path)
+            if mAP > best_mAP:
                 best_mAP = mAP
 
             if cmc[0] > best_r1:
-                best_r1 = cmc[0]
+                path = osp.join(checkpoint_path, f"epoch_{epoch:02}_rank1_{cmc[0]*100:.2f}_mAP_{mAP*100:.2f}_{suffix}.ckpt")
+                save_checkpoint(net, path)
+                path = osp.join(checkpoint_path, f"best_{suffix}.ckpt")
+                save_checkpoint(net, path)
 
-            test_log_file.flush()
+                best_r1 = cmc[0]
+                best_epoch = epoch
+
+            print('Best(Epoch {}):   Rank-1: {:.2%} | mAP: {:.2%}'.format(best_epoch, best_r1, best_mAP))
+            print('Best(Epoch {}):   Rank-1: {:.2%} | mAP: {:.2%}'.format(best_epoch, best_r1, best_mAP), file=log_file)
+
+            print("*****************************************************************************************")
+            print("*****************************************************************************************", file=log_file)
+
+            log_file.flush()
 
         show_memory_info("test: epoch {}".format(epoch))
 
-    print(f"The best mAP is {best_mAP:.4f}, best rank-1 is {best_r1:.4f}")
-    print(f"The best mAP is {best_mAP:.4f}, best rank-1 is {best_r1:.4f}", file=test_log_file )
-    test_log_file.flush()
-    test_log_file.close()
+    print(f"Best mAP: {best_mAP:.4f}, Best rank-1: {best_r1:.4f}, Best epoch: {best_epoch}(according to Rank-1)")
+    print(f"Best mAP: {best_mAP:.4f}, Best rank-1: {best_r1:.4f}, Best epoch: {best_epoch}(according to Rank-1)", file=log_file)
+    log_file.flush()
+    log_file.close()
