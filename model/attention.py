@@ -4,7 +4,7 @@ import mindspore.nn as nn
 import mindspore.common.initializer as weight_init
 import mindspore.ops as P
 from mindspore.ops import L2Normalize, Transpose
-from mindspore.common.initializer import Normal, Constant
+from mindspore.common.initializer import initializer, Normal, Constant, XavierUniform
 
 
 class IWPA(nn.Cell):
@@ -33,14 +33,6 @@ class IWPA(nn.Cell):
         self.fc3 = nn.Conv2d(in_channels=self.in_channels, out_channels=self.inter_channels,
         kernel_size=1, stride=1, padding=0)
 
-        self.W = nn.SequentialCell(
-            nn.Conv2d(in_channels=self.inter_channels, out_channels=self.out_channels,
-            kernel_size=1, stride=1, padding=0),
-            nn.BatchNorm2d(self.out_channels),
-        )
-        # self.W[1].weight.set_data(Constant(0.0))
-        # self.w[2].bias.set_data(Constant(0.0))
-
         self.bottleneck = nn.BatchNorm1d(in_channels)
         self.bottleneck.requires_grad=False # no shift
 
@@ -53,13 +45,14 @@ class IWPA(nn.Cell):
         self.gate.set_data(weight_init.initializer(Constant(1/self.part), self.gate.shape, self.gate.dtype))
 
 
-    def construct(self, x, feat, t=None): # ? what is t?
+    def construct(self, x, feat, t=None):
+        # x: N x 2048 x 9 x 5
         bt, c, h ,w = x.shape
         b = bt // t
 
         # get part features
-        part_feat_pool = nn.AvgPool2d(kernel_size=(6,9), stride=(6,1))
-        part_feat = part_feat_pool(x)
+        part_feat = P.AdaptiveAvgPool2D((3, 1))(x)
+        # part_feat = P.ReduceMean(keep_dims=True)(x.view(b, c, 3, 15), (3))
         part_feat = part_feat.view(b, t, c, self.part)
         transpose =  Transpose()
         part_feat = transpose(part_feat, (0, 2, 1, 3)) # B, C, T, Part
@@ -73,7 +66,7 @@ class IWPA(nn.Cell):
         part_feat3 = transpose(part_feat3, (0, 2, 1)) # B, T*part, C//r
 
         # get cross-part attention
-        cpa_att = mat_mul(part_feat1, part_feat2) # B, T*part, T*part
+        cpa_att = P.matmul(part_feat1, part_feat2) # B, T*part, T*part
         cpa_att = self.softmax(cpa_att)
 
         # collect contextual information
@@ -81,13 +74,70 @@ class IWPA(nn.Cell):
         refined_part_feat = transpose(refined_part_feat, (0, 2, 1)) # B, C//r, T*part
         refined_part_feat = refined_part_feat.view((b, self.inter_channels, self.part)) # B, C//r, T, part
 
-        # gate = self.softmax(self.gate)
-        # weight_part_feat = nn.MatMul(refined_part_feat, gate)
+        self.gate = self.softmax(self.gate)
         weight_part_feat = P.matmul(refined_part_feat, self.gate)
-        weight_part_feat = weight_part_feat.view((weight_part_feat.shape[0], weight_part_feat.shape[1], 1 ,1))
-        print("weight_part_feat shape is", weight_part_feat.shape)
         
         weight_part_feat = weight_part_feat + feat
         feat = self.bottleneck(weight_part_feat)
 
         return feat
+    
+
+class GraphAttentionBlock(nn.Cell):
+    """
+    Simple GAT layer
+    Original idea similar to https://arxiv.org/abs/1710.10903
+    """
+    
+    def __init__(self, in_features, out_features, dropout, alpha=0.3, concat=True):
+        super(GraphAttentionBlock, self).__init__()
+        self.dropout = dropout
+        self.in_features = in_features
+        self.out_features = out_features
+        self.alpha = alpha
+        self.concat = concat
+        
+        self.W = ms.Parameter(initializer(XavierUniform(), (in_features, out_features), ms.float32))
+        self.a = ms.Parameter(initializer(XavierUniform(), (2 * out_features, 1), ms.float32))
+        
+        self.leakyrelu = nn.LeakyReLU(alpha)
+        
+    def construct(self, input, adj):
+        # input: N x in_features
+        h = P.matmul(input, self.W) # h: N * out_features
+        N = h.shape[0]
+        a_input1 = ms.numpy.tile(h, (1, N)).view(N * N, -1) # a_input1: N x (N x out_features) 
+        a_input2 = ms.numpy.tile(h, (N, 1)) # a_input2: (N x N) x out_features
+        a_input = P.Concat(1)([a_input1, a_input2]).view(N, -1, 2 * self.out_features) # a_input: N x N x 2 x out_features
+        e = self.leakyrelu(P.matmul(a_input, self.a))
+        e = P.Squeeze(2)(e) # e: N x N
+        
+        zero_vec = -9e15 * P.ones_like(e)
+        attention = ms.numpy.where(adj > 0, e, zero_vec)
+        attention = P.Softmax(1)(attention)
+        attention = ms.nn.Dropout(keep_prob=1-self.dropout)(attention)
+        h_prime = P.matmul(attention, h) #h: N x out_features
+        
+        if self.concat:
+            return P.Elu()(h_prime)
+        else:
+            return h_prime
+        
+        
+class GraphAttentionLayer(nn.Cell):
+    def __init__(self, class_num, nheads, pool_dim, low_dim, dropout=0.2, alpha=0.3):
+        super().__init__()
+        self.dropout = dropout
+        self.nheads = nheads
+        self.attentions = [GraphAttentionBlock(pool_dim, low_dim, dropout=dropout, alpha=alpha, concat=True)
+                           for _ in range(nheads)]
+        
+        self.out_attention = GraphAttentionBlock(low_dim * nheads, class_num, dropout=dropout, alpha=alpha, concat=False) 
+        
+    def construct(self, input, adj):
+        feat = nn.Dropout(keep_prob=1-self.dropout)(input)
+        feat_gatt = P.Concat(1)([att(feat, adj) for att in self.attentions])
+        feat_gatt = nn.Dropout(keep_prob=1-self.dropout)(input)
+        feat_gatt = P.Elu()(self.out_attention(feat_gatt, adj))
+        
+        return feat_gatt

@@ -4,9 +4,8 @@ import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as P
 import numpy as np
-from mindspore import Tensor
-
-from IPython import embed
+from mindspore import Tensor, context
+import mindspore.numpy as mindnp
 
 class MarginRankingLoss(nn.Cell):
     def __init__(self, margin=0, error_msg=None):
@@ -31,10 +30,8 @@ class MarginRankingLoss(nn.Cell):
 
 class OriTripletLoss(nn.Cell):
     """Triplet loss with hard positive/negative mining.
-
     Reference:
     Hermans et al. In Defense of the Triplet Loss for Person Re-Identification. arXiv:1703.07737.
-
     Args:
     - margin (float): margin for triplet.
     """
@@ -100,3 +97,50 @@ class OriTripletLoss(nn.Cell):
         # # compute accuracy
         # correct = torch.ge(dist_an, dist_ap).sum().item()
         return loss
+
+
+class CenterTripletLoss(nn.Cell):
+
+    def __init__(self, batch_size, margin=0.3):
+        super(CenterTripletLoss, self).__init__()
+        self.batch_size = batch_size
+        self.margin = margin
+        self.OriTripletLoss = OriTripletLoss(batch_size=batch_size // 4, margin=margin)
+        self.unique = P.Unique()
+        self.cat = P.Concat(axis=0)
+        self.mean = P.ReduceMean(keep_dims=False)
+        
+
+    def construct(self, input_, label):
+        """
+        Args:
+        - input: feature matrix with shape (batch_size, feat_dim)
+        - label: ground truth labels with shape (num_classes)
+        """
+
+        dim = input_.shape[1]
+        label_uni = self.unique(label)[0]
+        targets = self.cat((label_uni, label_uni)) # 2class_num
+        label_num = len(label_uni)
+        input_trans = input_.transpose() # [2048 , 64]
+        # [2048 , 16, 4]
+        input_trans = input_trans.view((input_trans.shape[0], 2 * label_num, input_trans.shape[1] // (2 * label_num) ))
+        centers = P.ReduceMean()(input_trans, 2)
+        new_input = centers.transpose()
+        loss = self.OriTripletLoss(new_input, targets)
+
+        return loss[0]
+
+
+if __name__ == "__main__":
+    context.set_context(mode=context.PYNATIVE_MODE, device_target="GPU", save_graphs=False)
+    lossNet = CenterTripletLoss(margin=0.3, batch_size=2 * 32)
+    data = np.load("/home/shz/pytorch/shz/DDAG_mindspore_zzw/batchdata.npy", allow_pickle=True)
+    label = np.load("/home/shz/pytorch/shz/DDAG_mindspore_zzw/batchlabel.npy", allow_pickle=True)
+    print(data)
+    data = Tensor(data, dtype=ms.float32)
+    label = Tensor(label, dtype=ms.int32)
+
+    loss = lossNet(data, label)
+
+    print(loss)

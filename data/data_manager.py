@@ -35,9 +35,9 @@ def process_query_sysu(data_path, mode = 'all', relabel=False):
         query_cam.append(camid)
     return query_img, np.array(query_id), np.array(query_cam)
 
-def process_gallery_sysu(data_path, mode = 'all', trial = 0, relabel=False):
+def process_gallery_sysu(data_path, mode = 'all', random_seed = 0, relabel=False):
     
-    random.seed(trial)
+    random.seed(random_seed)
     
     if mode== 'all':
         rgb_cameras = ['cam1','cam2','cam4','cam5']
@@ -69,9 +69,9 @@ def process_gallery_sysu(data_path, mode = 'all', trial = 0, relabel=False):
     
 def process_test_regdb(img_dir, trial = 1, modal = 'visible'):
     if modal=='visible':
-        input_data_path = img_dir + 'idx/test_visible_{}'.format(trial) + '.txt'
+        input_data_path = osp.join(img_dir, 'idx/test_visible_{}'.format(trial) + '.txt')
     elif modal=='thermal':
-        input_data_path = img_dir + 'idx/test_thermal_{}'.format(trial) + '.txt'
+        input_data_path = osp.join(img_dir, 'idx/test_thermal_{}'.format(trial) + '.txt')
     
     with open(input_data_path) as f:
         data_file_list = open(input_data_path, 'rt').read().splitlines()

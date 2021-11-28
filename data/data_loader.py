@@ -10,7 +10,7 @@ from IPython import embed
 class SYSUDatasetGenerator():
     """
     """
-    def __init__(self, data_dir="./data/sysu/", transform_rgb=None, transform_ir=None, colorIndex=None, thermalIndex=None, ifDebug=False):
+    def __init__(self, data_dir, transform_rgb=None, transform_ir=None, colorIndex=None, thermalIndex=None, ifDebug=False):
 
         # Load training images (path) and labels
         if ifDebug:   
@@ -62,6 +62,58 @@ class SYSUDatasetGenerator():
         # __len__ function will be called in ds.GeneratorDataset()
         # print("len_cIndex", self.cIndex.shape)
         return len(self.cIndex)
+
+
+class RegDBDatasetGenerator():
+    """
+    Data Generator for custom DataLoader in mindspore, for RegDB dataset
+    """
+    def __init__(self, data_dir, trial, colorIndex=None, thermalIndex=None):
+        # Load training images (path) and labels
+        train_color_list = os.path.join(data_dir, f'idx/train_visible_{trial}' + '.txt')
+        train_thermal_list = os.path.join(data_dir, f'idx/train_thermal_{trial}' + '.txt')
+
+        color_img_file, train_color_label = load_data(train_color_list)
+        thermal_img_file, train_thermal_label = load_data(train_thermal_list)
+
+        train_color_image = []
+        for _, file_ in enumerate(color_img_file):
+            img = Image.open(os.path.join(data_dir, file_))
+            img = img.resize((144, 288), Image.ANTIALIAS)
+            pix_array = np.array(img)
+            train_color_image.append(pix_array)
+        train_color_image = np.array(train_color_image)
+
+        train_thermal_image = []
+        for _, file_ in enumerate(thermal_img_file):
+            img = Image.open(os.path.join(data_dir, file_))
+            img = img.resize((144, 288), Image.ANTIALIAS)
+            pix_array = np.array(img)
+            train_thermal_image.append(pix_array)
+        train_thermal_image = np.array(train_thermal_image)
+
+        # BGR to RGB
+        self.train_color_image = train_color_image
+        self.train_color_label = train_color_label
+
+        # BGR to RGB
+        self.train_thermal_image = train_thermal_image
+        self.train_thermal_label = train_thermal_label
+
+        self.cindex = colorIndex
+        self.tindex = thermalIndex
+
+    def __getitem__(self, index):
+
+        img1, target1 = self.train_color_image[self.cindex[index]],\
+            self.train_color_label[self.cindex[index]]
+        img2, target2 = self.train_thermal_image[self.tindex[index]],\
+            self.train_thermal_label[self.tindex[index]]
+
+        return img1, img2, target1, target2
+
+    def __len__(self):
+        return len(self.train_color_label)
 
 
 class TestData():

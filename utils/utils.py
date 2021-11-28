@@ -1,10 +1,36 @@
 import os
 import os.path as osp
+import sys
 import numpy as np
 import mindspore.dataset as ds
-import sys
+import mindspore.nn as nn
 
-def GenIdx(train_color_label, train_thermal_label):
+from mindspore import Tensor
+
+
+def get_param_list(save_obj):
+    """
+    Params:
+        save_obj: mindspore.nn.module object
+    Returns:
+        A list of parameters of save_obj
+    """
+    if isinstance(save_obj, nn.Cell):
+        param_dict = {}
+        for _, param in save_obj.parameters_and_names():
+            param_dict[param.name] = param
+        param_list = []
+        for (key, value) in param_dict.items():
+            each_param = {"name": key}
+            param_data = Tensor(value.data)
+            each_param["data"] = param_data
+            param_list.append(each_param)
+        return param_list
+
+    return -1
+
+
+def genidx(train_color_label, train_thermal_label):
     """
     Generate
     """

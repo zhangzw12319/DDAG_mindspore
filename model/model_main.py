@@ -1,24 +1,24 @@
 from unicodedata import normalize
 import mindspore as ms
 import mindspore.nn as nn
-import mindspore.ops as P
 import mindspore.common.initializer as init
+import mindspore.ops as P
 from mindspore.common.initializer import Initializer, _assignment, random_normal
 from model.resnet import *
-from model.attention import IWPA
+from model.attention import IWPA, GraphAttentionLayer
 
 import os
 import numpy as np
 import psutil
 from IPython import embed
 
-def show_memory_info(hint=""):
-    pid = os.getpid()
+# def show_memory_info(hint=""):
+#     pid = os.getpid()
 
-    p = psutil.Process(pid)
-    info = p.memory_full_info()
-    memory = info.uss/1024./1024
-    print(f"{hint} memory used: {memory} MB ")
+#     p = psutil.Process(pid)
+#     info = p.memory_full_info()
+#     memory = info.uss/1024./1024
+#     print(f"{hint} memory used: {memory} MB ")
 
 class Normal_with_mean(Initializer):
     """
@@ -38,7 +38,6 @@ class Normal_with_mean(Initializer):
 
     def _initialize(self, arr):
         seed, seed2 = self.seed
-        normalize
         output_tensor = ms.Tensor(np.zeros(arr.shape, dtype=np.float32) + np.ones(arr.shape, dtype=np.float32) * self.mu)
         random_normal(arr.shape, seed, seed2, output_tensor)
         output_data = output_tensor.asnumpy()
@@ -136,13 +135,14 @@ class base_resnet(nn.Cell):
 class embed_net(nn.Cell):
     def __init__(self, low_dim, class_num=200, drop=0.2, part=0, alpha=0.2, nheads=4, arch="resnet50", pretrain=""):
         super(embed_net, self).__init__()
-        # print("class_num is :", class_num)
         self.thermal_module = thermal_module(arch=arch, pretrain=pretrain)
         self.visible_module = visible_module(arch=arch, pretrain=pretrain)
         self.base_resnet = base_resnet(arch=arch, pretrain=pretrain)
         pool_dim = 2048
         self.dropout = drop
-        self.part = part 
+        self.part = part
+        self.class_num = class_num
+        self.nheads = nheads
 
         self.l2norm = Normalize(2)
         self.bottleneck = nn.BatchNorm1d(num_features=pool_dim)
@@ -153,12 +153,17 @@ class embed_net(nn.Cell):
         weights_init_classifier(self.classifier)
 
         self.avgpool = P.ReduceMean(keep_dims=True)
-        # if self.part > 0:
-        #     self.wpa = IWPA(pool_dim, self.part)
-        # else:
-        #     self.wpa = IWPA(pool_dim, 3)
+        if self.part > 0:
+            self.wpa = IWPA(pool_dim, self.part)
+        else:
+            self.wpa = IWPA(pool_dim, 3)
 
         self.cat = P.Concat()
+        
+        if nheads > 0:
+            self.graph_att = GraphAttentionLayer(class_num, nheads, pool_dim, low_dim, drop, alpha)
+        else:
+            self.graph_att = GraphAttentionLayer(class_num, 4, pool_dim, low_dim, drop, alpha)
 
     def construct(self, x1, x2=None, adj=None, modal=0, cpa=False):
         
@@ -173,7 +178,7 @@ class embed_net(nn.Cell):
 
         # shared four blocks
         # print("x.shape is ", x.shape)
-        x = self.base_resnet(x)
+        x = self.base_resnet(x) # N x 2048 x 9 x 5
         # print("x.shape is ", x.shape)
         x_pool = self.avgpool(x, (2,3))
         # print("x_pool.shape is ", x_pool.shape)
@@ -181,16 +186,15 @@ class embed_net(nn.Cell):
         # print("After Reshape:", x_pool.shape)
         # print("x_pool is :", x_pool)
         feat = self.bottleneck(x_pool) # mindspore version >=1.3.0
-        feat_att = feat
 
-        # if self.part > 0:
-        #     # intra_modality weighted part attention
-        #     feat_att = self.wpa(x, feat, 1) # why t==1?
+        if self.part > 0:
+            # intra_modality weighted part attention
+            feat_att = self.wpa(x, feat, 1)
 
         if self.training:
-            # cross-modality graph attention
-            # TODO: Add cross-modality graph attention mindspore version            
-            # return x_pool, self.classifier(feat), self.classifier(feat_att)
+            if self.nheads > 0: 
+                # cross-modality graph attention
+                out_graph = nn.LogSoftmax()(self.graph_att(feat, adj))
             
             out = self.classifier(feat)
             # print("resnet classification output is", out)
@@ -198,6 +202,12 @@ class embed_net(nn.Cell):
                 out_att = self.classifier(feat_att)
                 # print("IWPA classification output is", out_att)
 
+            if (self.part > 0) and (self.nheads > 0):
+                return feat, feat_att, out, out_att, out_graph
+            
+            if self.nheads > 0:
+                return feat, feat, out, out, out_graph                
+            
             if self.part > 0:
                 return feat, feat_att, out, out_att
             else:
@@ -208,7 +218,16 @@ class embed_net(nn.Cell):
                 return self.l2norm(feat), self.l2norm(feat_att)
             else:
                 return self.l2norm(feat), self.l2norm(feat) # just for debug
-
-
-        
-
+            
+    def create_graph(self, target1, target2):
+        """
+        Graph Construction
+        """
+        target = P.Cast()(self.cat([target1, target2]), ms.int32)
+        one_hot = P.Gather()(P.Eye()(self.class_num, self.class_num, ms.float32), target, 0)
+        one_hot_tran = one_hot.transpose()
+        adj = ms.ops.matmul(one_hot, one_hot_tran) + P.Eye()(target.shape[0], target.shape[0], ms.float32)
+        # adjacent matrix normalize
+        norm = P.Pow()(P.Pow()(adj, 2).sum(axis=1, keepdims=True), 1. /2)
+        adj_norm = P.Div()(adj, norm)
+        return adj_norm

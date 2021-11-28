@@ -27,27 +27,18 @@ from mindspore.train.dataset_helper import connect_network_with_dataset
 from mindspore.nn import SGD, Adam, TrainOneStepCell, WithLossCell
 
 
-from data.data_loader import *
-from data.data_manager import *
+from data.data_loader import SYSUDatasetGenerator, RegDBDatasetGenerator, TestData
+from data.data_manager import process_gallery_sysu, process_query_sysu, process_test_regdb
 from model.eval import test
 from model.lr_generator import LR_Scheduler
-from model.model_main import *
-from model.trainingCell import Criterion_with_Net, Optimizer_with_Net_and_Criterion
-from model.resnet import *
-from utils.loss import *
-from utils.utils import *
+from model.model_main import embed_net
+from model.trainingcell import CriterionWithNet, OptimizerWithNetAndCriterion
+from utils.loss import OriTripletLoss, CenterTripletLoss
+from utils.utils import IdentitySampler, genidx, AverageMeter, get_param_list
 
 from PIL import Image
 from IPython import embed
 from tqdm import tqdm
-
-
-def show_memory_info(hint=""):
-    pid = os.getpid()
-    p = psutil.Process(pid)
-    info = p.memory_full_info()
-    memory = info.uss/1024./1024
-    print(f"{hint} memory used: {memory} MB ")
 
 
 def get_parser():
@@ -56,7 +47,7 @@ def get_parser():
     # dataset settings
     parser.add_argument("--dataset", default='SYSU', choices=['SYSU', 'RegDB'],
                         help='dataset name: RegDB or SYSU')
-    parser.add_argument('--data-path',type=str, default='data' )
+    parser.add_argument('--data-path',type=str, default='')
     # Only used on Huawei Cloud OBS service,
     # when this is set, --data_path is overrided by --data-url
     parser.add_argument("--data-url", type=str, default=None)
@@ -70,9 +61,6 @@ def get_parser():
                         metavar='t', help='trial (only for RegDB dataset)')
     parser.add_argument('--debug', default="no", choices=["yes", "no"],
                         help='if set yes, use demo dataset for debugging,(only for SYSU dataset)')
-    # TODO: add multi worker dataloader support
-    # parser.add_argument('--workers', default=4, type=int, metavar='N',
-    #                     help='number of data loading workers (default: 4)')
 
 
     # image transform         
@@ -89,9 +77,6 @@ def get_parser():
                     help='network baseline:resnet50')
     parser.add_argument('--part', default=0, type=int,
                         metavar='tb', help='part number, either add weighted part attention  module')
-    # TODO: add multi head graph attention module
-    # parser.add_argument('--lambda0', default=1.0, type=float,
-    #                     metavar='lambda0', help='graph attention weights')
     parser.add_argument('--graph', action='store_true', help='either add graph attention or not')
 
 
@@ -125,22 +110,24 @@ def get_parser():
     parser.add_argument('--device-num', default=1, type=int, help='the total number of available gpus')
     parser.add_argument('--resume', '-r', default='', type=str,
                         help='resume from checkpoint, no resume:""')
-    parser.add_argument('--pretrain', type=str, default="model/pretrain/resnet50_ascend_v111_imagenet2012_official_cv_bs32_acc76/resnet50.ckpt",
+    parser.add_argument('--pretrain', type=str, default="",
                         help='Pretrain resnet-50 checkpoint path, no pretrain: ""')
-    parser.add_argument('--model-path', default='ckpt/', type=str,
-                        help='model checkpoint save path')
     parser.add_argument('--run_distribute', action='store_true', 
                         help="if set true, this code will be run on distrubuted architecture with mindspore")                    
     parser.add_argument('--parameter-server', default=False)
+    parser.add_argument('--save-period', default=20, type=int,
+                        help=" save checkpoint file every args.save_period epochs")
     
 
     # logging configs
-    parser.add_argument('--ckpt', default='test', type=str, help='ckpt suffix name')
+    parser.add_argument('--logs', default='test', type=str, help='logs suffix name')
     parser.add_argument("--branch-name", default="master",
                         help="Github branch name, for ablation study tagging")
+    parser.add_argument('--tag', default='toy', type=str, help='logfile suffix name')
     
     # testing / evaluation config 
-    parser.add_argument('--mode', default='all', type=str, help='all or indoor')
+    parser.add_argument('--sysu_mode', default='all', type=str, help='all or indoor', choices=['all', 'indoor'])
+    parser.add_argument('--regdb_mode', default='v2i', type=str, choices=['v2i', 'i2v'])
     
     return parser
 
@@ -177,7 +164,8 @@ def optim(epoch, backbone_lr_scheduler, head_lr_scheduler):
     if args.optim == 'sgd':
         ignored_params = list(map(id, net.bottleneck.trainable_params())) \
                        + list(map(id, net.classifier.trainable_params())) \
-                        # + list(map(id, net.wpa.trainable_params())) \
+                       + list(map(id, net.wpa.trainable_params())) \
+                       + list(map(id, net.graph_att.trainable_params()))
 
         base_params = list(filter(lambda p: id(p) not in ignored_params, net.trainable_params()))
 
@@ -185,14 +173,16 @@ def optim(epoch, backbone_lr_scheduler, head_lr_scheduler):
             {'params': base_params, 'lr': backbone_lr},
             {'params': net.bottleneck.trainable_params(), 'lr': head_lr},
             {'params': net.classifier.trainable_params(), 'lr': head_lr},
-            # {'params': net.wpa.trainable_params(), 'lr': head_lr},
+            {'params': net.wpa.trainable_params(), 'lr': head_lr},
+            {'params': net.graph_att.trainable_params(), 'lr': head_lr}
             ],
             learning_rate=args.lr, weight_decay=5e-4, nesterov=True, momentum=0.9)
 
     elif args.optim == 'adam':
         ignored_params = list(map(id, net.bottleneck.trainable_params())) \
                        + list(map(id, net.classifier.trainable_params())) \
-                    #    + list(map(id, net.wpa.trainable_params())) \
+                       + list(map(id, net.wpa.trainable_params())) \
+                       + list(map(id, net.graph_att.trainable_params()))
 
         base_params = list(filter(lambda p: id(p) not in ignored_params, net.trainable_params()))
 
@@ -200,7 +190,8 @@ def optim(epoch, backbone_lr_scheduler, head_lr_scheduler):
             {'params': base_params, 'lr': backbone_lr},
             {'params': net.bottleneck.trainable_params(), 'lr': head_lr},
             {'params': net.classifier.trainable_params(), 'lr': head_lr},
-            # {'params': net.wpa.trainable_params(), 'lr': head_lr},
+            {'params': net.wpa.trainable_params(), 'lr': head_lr},
+            {'params': net.graph_att.trainable_params(), 'lr': head_lr}
         ],
             learning_rate=args.lr, weight_decay=5e-4)
 
@@ -273,10 +264,10 @@ if __name__ == "__main__":
     loader_batch = args.batch_size * args.num_pos
 
     if device == "GPU" or device == "CPU":
-        checkpoint_path = os.path.join("ckpt", args.ckpt)
+        checkpoint_path = os.path.join("logs", args.tag, "training")
         os.makedirs(checkpoint_path, exist_ok=True)
 
-        suffix = args.ckpt + "_" + str(args.dataset)
+        suffix = args.logs + "_" + str(args.dataset)
         
         suffix = suffix + '_batch-size_2*{}*{}={}'.format(args.batch_size, args.num_pos, 2 * loader_batch)
         suffix = suffix + '_{}_lr_{}'.format(args.optim, args.lr)
@@ -284,6 +275,9 @@ if __name__ == "__main__":
 
         if args.part > 0:
             suffix = suffix + '_P_{}'.format(args.part)
+            
+        if args.graph:
+            suffix = suffix + '_Graph_'
         
         if args.dataset == 'RegDB':
             suffix = suffix + '_trial_{}'.format(args.trial)
@@ -292,10 +286,12 @@ if __name__ == "__main__":
 
         time_msg = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
         log_file = open(osp.join(checkpoint_path, "{}_performance_{}.txt".format(suffix, time_msg)), "w")
-        # error_file = open(osp.join(checkpoint_path, "{}_error_{}.txt".format(suffix, time_msg)), "w")
-        # pretrain_file = open(osp.join(checkpoint_path, "{}_pretrain_{}.txt".format(suffix, time_msg)), "w")
+
         print('Args: {}'.format(args))
         print('Args: {}'.format(args), file=log_file)
+        print()
+        print(f"Log file is saved in {osp.join(os.getcwd(), checkpoint_path)}")
+        print(f"Log file is saved in {osp.join(os.getcwd(), checkpoint_path)}", file=log_file)
 
 
     ########################################################################
@@ -304,13 +300,9 @@ if __name__ == "__main__":
     dataset_type = args.dataset
 
     if dataset_type == "SYSU":
-        # infrared to visible(1->2)
-        # TODO: define your data path
-        data_path = osp.join(args.data_path, 'sysu')
+        data_path = args.data_path
     elif dataset_type == "RegDB":
-        # visible tu infrared(2->1)
-        # TODO: define your data path
-        data_path = osp.join(args.data_path, 'regdb')
+        data_path = args.data_path
     
     best_acc = 0
     best_acc = 0  # best test accuracy
@@ -338,9 +330,9 @@ if __name__ == "__main__":
     transform_train_ir = Compose(
         [
             decode,
-            # py_trans.Pad(10),
-            # py_trans.RandomCrop((args.img_h, args.img_w)),
-            # py_trans.RandomGrayscale(prob=0.5),
+            py_trans.Pad(10),
+            py_trans.RandomCrop((args.img_h, args.img_w)),
+            py_trans.RandomGrayscale(prob=0.5),
             py_trans.RandomHorizontalFlip(),
             py_trans.ToTensor(),
             py_trans.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -362,14 +354,29 @@ if __name__ == "__main__":
     if dataset_type == "SYSU":
         # train_set
         trainset_generator = SYSUDatasetGenerator(data_dir=data_path, transform_rgb=transform_train_rgb, transform_ir=transform_train_ir,  ifDebug=ifDebug_dic.get(args.debug))
-        color_pos, thermal_pos = GenIdx(trainset_generator.train_color_label, trainset_generator.train_thermal_label)
+        color_pos, thermal_pos = genidx(trainset_generator.train_color_label, trainset_generator.train_thermal_label)
         
         # testing set
-        query_img, query_label, query_cam = process_query_sysu(data_path, mode=args.mode)
-        gall_img, gall_label, gall_cam = process_gallery_sysu(data_path, mode=args.mode, trial=0)
+        query_img, query_label, query_cam = process_query_sysu(data_path, mode=args.sysu_mode)
+        gall_img, gall_label, gall_cam = process_gallery_sysu(data_path, mode=args.sysu_mode, random_seed=0)
 
     elif dataset_type == "RegDB":
-        pass
+        # train_set
+        trainset_generator = RegDBDatasetGenerator(data_dir=data_path, trial=args.trial)
+        color_pos, thermal_pos = genidx(trainset_generator.train_color_label,\
+            trainset_generator.train_thermal_label)
+
+        # testing set
+        if args.regdb_mode == "v2i":
+            query_img, query_label = process_test_regdb(img_dir=data_path,\
+                modal="visible", trial=args.trial)
+            gall_img, gall_label = process_test_regdb(img_dir=data_path,\
+                modal="thermal", trial=args.trial)
+        elif args.regdb_mode == "i2v":
+            query_img, query_label = process_test_regdb(img_dir=data_path,\
+                modal="thermal", trial=args.trial)
+            gall_img, gall_label = process_test_regdb(img_dir=data_path,\
+                modal="visible", trial=args.trial) 
 
     ########################################################################
     # Create Query && Gallery
@@ -394,7 +401,10 @@ if __name__ == "__main__":
     nquery = len(query_label)
     ngall = len(gall_label)
 
-    net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, arch=args.arch, pretrain=args.pretrain)
+    if args.graph:
+        net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, nheads=4 ,arch=args.arch, pretrain=args.pretrain)
+    else:
+        net = embed_net(args.low_dim, class_num=n_class, drop=args.drop, part=args.part, nheads=0 ,arch=args.arch, pretrain=args.pretrain)
 
     if len(args.resume) > 0:
         print("Resume checkpoint:{}". format(args.resume))
@@ -412,9 +422,9 @@ if __name__ == "__main__":
     ######################################################################## 
     CELossNet = nn.SoftmaxCrossEntropyWithLogits(sparse=True, reduction="mean")
     OriTripLossNet = OriTripletLoss(margin=args.margin, batch_size=2 * loader_batch)
-    # TripLossNet = TripletLoss(margin=args.margin)
+    CenterTriLossNet = CenterTripletLoss(margin=args.margin, batch_size=2 * loader_batch)
 
-    net_with_criterion = Criterion_with_Net(net, CELossNet, OriTripLossNet, lossFunc=args.loss_func)
+    net_with_criterion = CriterionWithNet(net, CELossNet, CenterTriLossNet, lossFunc=args.loss_func)
 
     ########################################################################
     # Define schedulers
@@ -434,7 +444,7 @@ if __name__ == "__main__":
     for epoch in range(start_epoch, args.epoch + 1):
 
         optimizer_P = optim(epoch, backbone_lr_scheduler, head_lr_scheduler)
-        net_with_optim = Optimizer_with_Net_and_Criterion(net_with_criterion, optimizer_P)
+        net_with_optim = OptimizerWithNetAndCriterion(net_with_criterion, optimizer_P)
 
         print('==> Preparing Data Loader...')
         # identity sampler: 
@@ -446,7 +456,7 @@ if __name__ == "__main__":
 
         # add sampler
         trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal", "color_label", "thermal_label"],
-                                       sampler=sampler)
+                                       sampler=sampler, num_parallel_workers=8)
 
         trainset = trainset.map(operations=transform_train_rgb, input_columns=["color"])
         trainset = trainset.map(operations=transform_train_ir, input_columns=["thermal"])
@@ -465,8 +475,6 @@ if __name__ == "__main__":
         dataset_helper = DatasetHelper(trainset, dataset_sink_mode=False)
         # net_with_optim = connect_network_with_dataset(net_with_optim, dataset_helper)
 
-        net.set_train(mode=True)
-      
         batch_idx = 0
         N = np.maximum(len(trainset_generator.train_color_label), len(trainset_generator.train_thermal_label))
         total_batch = int(N / loader_batch) + 1
@@ -478,13 +486,15 @@ if __name__ == "__main__":
         
         # calculate average accuracy
         acc = AverageMeter()
-
-        
+        net.set_train(mode=True)                
         for batch_idx, (img1, img2, label1, label2) in enumerate(tqdm(dataset_helper)):
             label1, label2 = ms.Tensor(label1, dtype=ms.float32), ms.Tensor(label2, dtype=ms.float32)
             img1, img2 = ms.Tensor(img1, dtype=ms.float32), ms.Tensor(img2, dtype=ms.float32)
-
-            loss = net_with_optim(img1, img2, label1, label2)
+            if args.graph:
+                adjacency = net.create_graph(label1, label2)
+                loss = net_with_optim(img1, img2, label1, label2, adj=adjacency)
+            else:
+                loss = net_with_optim(img1, img2, label1, label2)
             acc.update(net_with_criterion.acc)
             batch_time.update(time.time() - end_time)
             end_time = time.time()
@@ -515,8 +525,7 @@ if __name__ == "__main__":
                               batch_time=batch_time.avg,
                               acc = acc.avg * 100
                               ), file=log_file)
-        show_memory_info("train: epoch {}".format(epoch))
-
+        
         if epoch > 0:
 
             net.set_train(mode=False)
@@ -531,14 +540,16 @@ if __name__ == "__main__":
             query_loader = DatasetHelper(query_loader, dataset_sink_mode=False)
 
             if args.dataset == "SYSU":
-                # import pdb
-                # pdb.set_trace()
                 cmc, mAP, cmc_att, mAP_att = test(args, gallery_loader, query_loader, ngall,
                     nquery, net, 1, gallery_cam=gall_cam, query_cam=query_cam)
             
             if args.dataset == "RegDB":
-                cmc, mAP, cmc_att, mAP_att = test(args, gallset, queryset, ngall,
-                    nquery, net, 2)
+                if args.regdb_mode == "v2i":
+                    cmc, mAP, cmc_att, mAP_att = test(args, gallset, queryset, ngall,
+                        nquery, net, 2)
+                elif args.regdb_mode == "i2v":
+                    cmc, mAP, cmc_att, mAP_att = test(args, gallset, queryset, ngall,
+                        nquery, net, 1)
 
             print('FC:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
                 cmc[0], cmc[4], cmc[9], cmc[19], mAP))
@@ -551,29 +562,42 @@ if __name__ == "__main__":
                 print('FC_att:   Rank-1: {:.2%} | Rank-5: {:.2%} | Rank-10: {:.2%}| Rank-20: {:.2%}| mAP: {:.2%}'.format(
                     cmc_att[0], cmc_att[4], cmc_att[9], cmc_att[19], mAP_att), file=log_file)
 
-            if mAP > best_mAP:
-                best_mAP = mAP
+            # Save checkpoint weights every args.save_period Epoch
+            save_param_list = get_param_list(net)
+            if (epoch >= 2) and (epoch % args.save_period) == 0:
+                path = osp.join(checkpoint_path,\
+                    f"epoch_{epoch:02}_rank1_{cmc[0]*100:.2f}_mAP_{mAP*100:.2f}_{SUFFIX}.ckpt")
+                save_checkpoint(save_param_list, path)
 
-            if cmc[0] > best_r1:
-                path = osp.join(checkpoint_path, f"epoch_{epoch:02}_rank1_{cmc[0]*100:.2f}_mAP_{mAP*100:.2f}_{suffix}.ckpt")
-                save_checkpoint(net, path)
-                path = osp.join(checkpoint_path, f"best_{suffix}.ckpt")
-                save_checkpoint(net, path)
+            # Record the best performance
+            if (mAP > best_mAP) or (mAP_att > best_mAP):
+                best_mAP = max(mAP, best_mAP)
 
-                best_r1 = cmc[0]
+            if (cmc[0] > best_r1) or (cmc_att[0] > best_r1):
+                best_param_list = save_param_list
+                best_path = osp.join(checkpoint_path,\
+                    f"best_epoch_{epoch:02}_rank1_{cmc[0]*100:.2f}_mAP_{mAP*100:.2f}_{suffix}.ckpt")
+                best_r1 = max(cmc[0], cmc_att[0])
                 best_epoch = epoch
 
-            print('Best(Epoch {}):   Rank-1: {:.2%} | mAP: {:.2%}'.format(best_epoch, best_r1, best_mAP))
-            print('Best(Epoch {}):   Rank-1: {:.2%} | mAP: {:.2%}'.format(best_epoch, best_r1, best_mAP), file=log_file)
 
-            print("*****************************************************************************************")
-            print("*****************************************************************************************", file=log_file)
+            print("******************************************************************************")
+            print("******************************************************************************",
+                  file=log_file)
 
             log_file.flush()
 
-        show_memory_info("test: epoch {}".format(epoch))
 
-    print(f"Best mAP: {best_mAP:.4f}, Best rank-1: {best_r1:.4f}, Best epoch: {best_epoch}(according to Rank-1)")
-    print(f"Best mAP: {best_mAP:.4f}, Best rank-1: {best_r1:.4f}, Best epoch: {best_epoch}(according to Rank-1)", file=log_file)
+    if args.dataset == "SYSU":
+        print(f"For SYSU-MM01 {args.sysu_mode} search, the testing result is:")
+        print(f"For SYSU-MM01 {args.sysu_mode} search, the testing result is:", file=log_file)
+    elif args.dataset == "RegDB":
+        print(f"For RegDB {args.regdb_mode} search, the testing result is:")
+        print(f"For RegDB {args.regdb_mode} search, the testing result is:", file=log_file)
+
+    print(f"Best: rank-1: {best_r1:.2%}, mAP: {best_mAP:.2%}, \
+        Best epoch: {best_epoch}(according to Rank-1)")
+    print(f"Best: rank-1: {best_r1:.2%}, mAP: {best_mAP:.2%}, \
+        Best epoch: {best_epoch}(according to Rank-1)", file=log_file)
     log_file.flush()
     log_file.close()
