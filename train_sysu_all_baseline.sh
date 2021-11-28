@@ -7,7 +7,7 @@ python train_ddag.py \
 --lr 0.0035 \
 --gpu 3 \
 --device-target GPU \
---pretrain "model/pretrain/resnet50_ascend_v111_imagenet2012_official_cv_bs32_acc76/resnet50.ckpt" \
+--pretrain "checkpoint.ckpt" \
 --tag "sysu_all_baseline" \
 --data-path "/home/shz/pytorch/data/sysu" \
 --loss-func "id+tri" \

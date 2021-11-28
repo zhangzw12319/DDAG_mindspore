@@ -27,6 +27,7 @@ class CriterionWithNet(nn.Cell):
         self.lossFunc = lossFunc
         self.acc = 0
         self.total_loss = None
+        self.wg = 0
 
         self.cat = P.Concat()
         self.cast = P.Cast()
@@ -48,29 +49,28 @@ class CriterionWithNet(nn.Cell):
         np.save("batchlabel.npy", label_.asnumpy())
 
         loss_id = self._ce_loss(out, label_)
-        # 
-
         loss_tri = self._tri_loss(feat, label)
 
-        if self.lossFunc == 'tri': 
+        if self.lossFunc == 'tri':
             loss_total = loss_tri
         elif self.lossFunc == 'id+tri':
             loss_total = loss_id + loss_tri
         else:
             loss_total = loss_id
-            
+
         if self._backbone.part > 0:
             loss_p = self._ce_loss(out_att, label_)
             loss_total += loss_p
-        
+
         if self._backbone.nheads > 0:
             loss_g = P.NLLLoss("mean")(out_graph, label_, P.Ones()((out_graph.shape[1]), ms.float32))
-            loss_total += loss_g[0]
-   
+            loss_total += self.wg * loss_g[0]
+  
         predict , _ = self.max(out)
         correct = self.eq(predict, label_)
         self.acc = np.where(correct)[0].shape[0] / label_.shape[0]
         self.total_loss = loss_total
+
         return loss_total
 
     @property

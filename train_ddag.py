@@ -456,7 +456,7 @@ if __name__ == "__main__":
 
         # add sampler
         trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal", "color_label", "thermal_label"],
-                                       sampler=sampler, num_parallel_workers=8)
+                                       sampler=sampler, num_parallel_workers=2)
 
         trainset = trainset.map(operations=transform_train_rgb, input_columns=["color"])
         trainset = trainset.map(operations=transform_train_ir, input_columns=["thermal"])
@@ -484,9 +484,13 @@ if __name__ == "__main__":
         batch_time = AverageMeter()
         end_time = time.time()
         
+        # Calculate Avg loss
+        loss_avg = AverageMeter()
+        
         # calculate average accuracy
         acc = AverageMeter()
-        net.set_train(mode=True)                
+        net.set_train(mode=True)
+                 
         for batch_idx, (img1, img2, label1, label2) in enumerate(tqdm(dataset_helper)):
             label1, label2 = ms.Tensor(label1, dtype=ms.float32), ms.Tensor(label2, dtype=ms.float32)
             img1, img2 = ms.Tensor(img1, dtype=ms.float32), ms.Tensor(img2, dtype=ms.float32)
@@ -498,19 +502,18 @@ if __name__ == "__main__":
             acc.update(net_with_criterion.acc)
             batch_time.update(time.time() - end_time)
             end_time = time.time()
+            loss_avg.update(loss.asnumpy())
+            net_with_criterion.wg = 1. / (1. + loss_avg.avg)
+            
             if batch_idx % 100 == 0:
                 print('Epoch: [{}][{}/{}]   '
                       'LR: {LR:.4f}   '
                       'Loss:{Loss:.4f}   '
-                    #   'id:{Loss:.4f}   '
-                    #   'tri:{Loss:.4f}   '
                       'Batch Time:{batch_time:.2f}  '
                       'Accuracy:{acc:.2f}   '
                       .format(epoch, batch_idx, total_batch,
                               LR=float(head_lr_scheduler(ms.Tensor(epoch, ms.int32)).asnumpy()),
-                              Loss=float(loss.asnumpy()),
-                            #   id=float(loss_dict["id"].asnumpy()),
-                            #   tri=float(loss_dict["tri"].asnumpy()),
+                              Loss=float(loss_avg.avg),
                               batch_time=batch_time.avg,
                               acc = acc.avg * 100
                               ))
