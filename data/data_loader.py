@@ -10,7 +10,7 @@ from IPython import embed
 class SYSUDatasetGenerator():
     """
     """
-    def __init__(self, data_dir, transform_rgb=None, transform_ir=None, colorIndex=None, thermalIndex=None, ifDebug=False):
+    def __init__(self, data_dir, colorIndex=None, thermalIndex=None, ifDebug=False):
 
         # Load training images (path) and labels
         if ifDebug:   
@@ -29,8 +29,6 @@ class SYSUDatasetGenerator():
         print("Color Image Size:{}".format(len(self.train_color_image)))
         print("Color Label Size:{}".format(len(self.train_color_label)))
 
-        self.transform_rgb = transform_rgb
-        self.transform_ir = transform_ir
         self.cIndex = colorIndex
         self.tIndex = thermalIndex
 
@@ -38,23 +36,9 @@ class SYSUDatasetGenerator():
         pass
 
     def __getitem__(self, index):
-        # TODO: 这里要配合samplers输出的更改而更改
-        # print(index)
-        # print("self.cIndex is ",self.cIndex[index] )
-        # print("self.tIndex is ",self.tIndex[index] )
+
         img1, target1 = self.train_color_image[self.cIndex[index]], self.train_color_label[self.cIndex[index]]
         img2, target2 = self.train_thermal_image[self.tIndex[index]], self.train_thermal_label[self.tIndex[index]]
-        # print("img1 is:", img1)
-        # print("target1 is:", target1)
-        # print("img2 is:", img2)
-        # print("target2 is:", target2)
-
-        # img1, img2 = self.transform(img1)[0], self.transform(img2)[0]
-        # target1, target2 = np.array(target1, dtype=np.float32), np.array(target2, dtype=np.float32)
-
-        # img1, img2 = self.transform(img1)[0], self.transform(img2)[0]
-        # img1, img2 = ms.Tensor(img1, dtype=ms.float32), ms.Tensor(img2, dtype=ms.float32)
-        # target1, target2 = ms.Tensor(target1, dtype=ms.float32), ms.Tensor(target2, dtype=ms.float32)
 
         return (img1, img2, target1, target2)
 
@@ -62,6 +46,20 @@ class SYSUDatasetGenerator():
         # __len__ function will be called in ds.GeneratorDataset()
         # print("len_cIndex", self.cIndex.shape)
         return len(self.cIndex)
+
+
+def load_data(input_data_path):
+    """
+    loading data
+    """
+    with open(input_data_path, encoding="utf-8"):
+        with open(input_data_path, 'rt', encoding="utf-8") as path_str:
+            data_file_list = path_str.read().splitlines()
+            # Get full list of image and labels
+            file_image = [s.split(' ')[0] for s in data_file_list]
+            file_label = [int(s.split(' ')[1]) for s in data_file_list]
+
+    return file_image, file_label
 
 
 class RegDBDatasetGenerator():
@@ -100,24 +98,24 @@ class RegDBDatasetGenerator():
         self.train_thermal_image = train_thermal_image
         self.train_thermal_label = train_thermal_label
 
-        self.cindex = colorIndex
-        self.tindex = thermalIndex
+        self.cIndex = colorIndex
+        self.tIndex = thermalIndex
 
     def __getitem__(self, index):
 
-        img1, target1 = self.train_color_image[self.cindex[index]],\
-            self.train_color_label[self.cindex[index]]
-        img2, target2 = self.train_thermal_image[self.tindex[index]],\
-            self.train_thermal_label[self.tindex[index]]
+        img1, target1 = self.train_color_image[self.cIndex[index]],\
+            self.train_color_label[self.cIndex[index]]
+        img2, target2 = self.train_thermal_image[self.tIndex[index]],\
+            self.train_thermal_label[self.tIndex[index]]
 
-        return img1, img2, target1, target2
+        return (img1, img2, target1, target2)
 
     def __len__(self):
         return len(self.train_color_label)
 
 
 class TestData():
-    def __init__(self, test_img_file, test_label, img_size=(144,288), transform=None):
+    def __init__(self, test_img_file, test_label, img_size=(144,288)):
 
         test_image = []
         for i in range(len(test_img_file)):
@@ -129,11 +127,9 @@ class TestData():
         self.test_image = test_image
         self.test_label = test_label
 
-        self.transform = transform
 
     def __getitem__(self, index):
         img1, target1 = self.test_image[index], self.test_label[index]
-        # img1 = self.transform(img1)[0]
 
         return (img1, target1)
 

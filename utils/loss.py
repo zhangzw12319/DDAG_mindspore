@@ -60,6 +60,7 @@ class OriTripletLoss(nn.Cell):
         self.cat = P.Concat()
         self.matmul = P.MatMul()
         self.expand = P.BroadcastTo((batch_size, batch_size))
+        self.cast = P.Cast()
 
     def construct(self, inputs, targets):
         """
@@ -73,7 +74,7 @@ class OriTripletLoss(nn.Cell):
 
         # Compute pairwise distance, replace by the official when merged
         dist = self.pow(inputs, 2)
-        dist = self.sum(dist, axis=1)
+        dist = self.sum(dist, 1)
         dist = self.expand(dist)
         dist = self.add(dist, self.transpose(dist, (1, 0)))
 
@@ -85,10 +86,10 @@ class OriTripletLoss(nn.Cell):
 
         # For each anchor, find the hardest positive and negative
         targets = self.expand(targets)
-        mask_pos = Tensor(self.equal(targets, self.transpose(targets, (1, 0))), ms.int8)
-        mask_neg = Tensor(self.notequal(targets, self.transpose(targets, (1, 0))), ms.int8)
-        dist_ap = self.max(dist * mask_pos, axis=1).squeeze()
-        dist_an = self.min(self.max(dist * mask_neg, axis=1) * mask_pos + dist, axis=1).squeeze()
+        mask_pos = self.cast(self.equal(targets, self.transpose(targets, (1, 0))), ms.int8)
+        mask_neg = self.cast(self.notequal(targets, self.transpose(targets, (1, 0))), ms.int8)
+        dist_ap = self.max(dist * mask_pos, 1).squeeze()
+        dist_an = self.min(self.max(dist * mask_neg, 1) * mask_pos + dist, 1).squeeze()
 
         # Compute ranking hinge loss
         y = self.ones_like(dist_an)
@@ -96,7 +97,7 @@ class OriTripletLoss(nn.Cell):
 
         # # compute accuracy
         # correct = torch.ge(dist_an, dist_ap).sum().item()
-        return loss
+        return loss[0]
 
 
 class CenterTripletLoss(nn.Cell):
@@ -107,7 +108,7 @@ class CenterTripletLoss(nn.Cell):
         self.margin = margin
         self.OriTripletLoss = OriTripletLoss(batch_size=batch_size // 4, margin=margin)
         self.unique = P.Unique()
-        self.cat = P.Concat(axis=0)
+        self.cat = P.Concat()
         self.mean = P.ReduceMean(keep_dims=False)
         
 
@@ -120,27 +121,30 @@ class CenterTripletLoss(nn.Cell):
 
         dim = input_.shape[1]
         label_uni = self.unique(label)[0]
-        targets = self.cat((label_uni, label_uni)) # 2class_num
-        label_num = len(label_uni)
+        targets = self.cat([label_uni, label_uni]) # 2class_num
+        label_num = label_uni.shape[0]
         input_trans = input_.transpose() # [2048 , 64]
         # [2048 , 16, 4]
         input_trans = input_trans.view((input_trans.shape[0], 2 * label_num, input_trans.shape[1] // (2 * label_num) ))
         centers = P.ReduceMean()(input_trans, 2)
         new_input = centers.transpose()
         loss = self.OriTripletLoss(new_input, targets)
-
-        return loss[0]
+        
+        return loss
 
 
 if __name__ == "__main__":
-    context.set_context(mode=context.PYNATIVE_MODE, device_target="GPU", save_graphs=False)
-    lossNet = CenterTripletLoss(margin=0.3, batch_size=2 * 32)
+    context.set_context(mode=context.GRAPH_MODE, device_target="GPU", save_graphs=False)
+    # context.set_context(mode=context.PYNATIVE_MODE, device_target="GPU", save_graphs=False)
+    lossNet = OriTripletLoss(margin=0.3, batch_size=2 * 32)
     data = np.load("/home/shz/pytorch/shz/DDAG_mindspore_zzw/batchdata.npy", allow_pickle=True)
     label = np.load("/home/shz/pytorch/shz/DDAG_mindspore_zzw/batchlabel.npy", allow_pickle=True)
     print(data)
+    print(label)
     data = Tensor(data, dtype=ms.float32)
     label = Tensor(label, dtype=ms.int32)
+    print("Before")
 
     loss = lossNet(data, label)
-
+    print("After")
     print(loss)

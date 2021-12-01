@@ -17,6 +17,7 @@ class IWPA(nn.Cell):
         self.part = part
         self.l2norm = L2Normalize()
         self.softmax = nn.Softmax(axis=-1)
+        self.adaptive_pool_2d = P.AdaptiveAvgPool2D((part, 1))
 
         if self.inter_channels is None:
             self.inter_channels = in_channels
@@ -51,8 +52,7 @@ class IWPA(nn.Cell):
         b = bt // t
 
         # get part features
-        part_feat = P.AdaptiveAvgPool2D((3, 1))(x)
-        # part_feat = P.ReduceMean(keep_dims=True)(x.view(b, c, 3, 15), (3))
+        part_feat = self.adaptive_pool_2d(x)
         part_feat = part_feat.view(b, t, c, self.part)
         transpose =  Transpose()
         part_feat = transpose(part_feat, (0, 2, 1, 3)) # B, C, T, Part
@@ -92,6 +92,7 @@ class GraphAttentionBlock(nn.Cell):
     def __init__(self, in_features, out_features, dropout, alpha=0.3, concat=True):
         super(GraphAttentionBlock, self).__init__()
         self.dropout = dropout
+        self.drop = nn.Dropout(keep_prob=1-dropout)
         self.in_features = in_features
         self.out_features = out_features
         self.alpha = alpha
@@ -115,7 +116,7 @@ class GraphAttentionBlock(nn.Cell):
         zero_vec = -9e15 * P.ones_like(e)
         attention = ms.numpy.where(adj > 0, e, zero_vec)
         attention = P.Softmax(1)(attention)
-        attention = ms.nn.Dropout(keep_prob=1-self.dropout)(attention)
+        attention = self.drop(attention)
         h_prime = P.matmul(attention, h) #h: N x out_features
         
         if self.concat:
@@ -127,17 +128,20 @@ class GraphAttentionBlock(nn.Cell):
 class GraphAttentionLayer(nn.Cell):
     def __init__(self, class_num, nheads, pool_dim, low_dim, dropout=0.2, alpha=0.3):
         super().__init__()
-        self.dropout = dropout
+        self.drop = nn.Dropout(keep_prob=1-dropout)
         self.nheads = nheads
         self.attentions = [GraphAttentionBlock(pool_dim, low_dim, dropout=dropout, alpha=alpha, concat=True)
                            for _ in range(nheads)]
         
-        self.out_attention = GraphAttentionBlock(low_dim * nheads, class_num, dropout=dropout, alpha=alpha, concat=False) 
+        self.out_attention = GraphAttentionBlock(low_dim * nheads, class_num, dropout=dropout, alpha=alpha, concat=False)
         
     def construct(self, input, adj):
-        feat = nn.Dropout(keep_prob=1-self.dropout)(input)
-        feat_gatt = P.Concat(1)([att(feat, adj) for att in self.attentions])
-        feat_gatt = nn.Dropout(keep_prob=1-self.dropout)(input)
+        feat = self.drop(input)
+        gall_att = []
+        for att in self.attentions:
+            gall_att.append(att(feat, adj))
+        feat_gatt = P.Concat(1)(gall_att)
+        feat_gatt = self.drop(input)
         feat_gatt = P.Elu()(self.out_attention(feat_gatt, adj))
         
         return feat_gatt

@@ -2,15 +2,16 @@ export PATH=/usr/local/cuda-10.1/bin/:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda-10.1/lib/:$LD_LIBRARY_PATH
 
 python train_ddag.py \
---dataset SYSU \
+--dataset RegDB \
 --optim adam \
 --lr 0.0035 \
---gpu 2 \
+--gpu 0 \
 --device-target GPU \
 --pretrain "model/pretrain/resnet50_ascend_v111_imagenet2012_official_cv_bs32_acc76/resnet50.ckpt" \
---tag "sysu_all_baseline" \
---data-path "/home/shz/pytorch/data/sysu" \
+--tag "regdb_i2v" \
+--data-path "/home/shz/pytorch/data/regdb" \
 --loss-func "id+tri" \
 --branch main \
---sysu-mode "all" \
---part 0
+--regdb-mode "i2v" \
+--part 0 \
+--graph

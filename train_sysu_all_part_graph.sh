@@ -5,13 +5,14 @@ python train_ddag.py \
 --dataset SYSU \
 --optim adam \
 --lr 0.0035 \
---gpu 2 \
+--gpu 3 \
 --device-target GPU \
---pretrain "checkpoint.ckpt" \
+--pretrain "model/pretrain/resnet50_ascend_v111_imagenet2012_official_cv_bs32_acc76/resnet50.ckpt" \
 --tag "sysu_all_part_graph" \
 --data-path "/home/shz/pytorch/data/sysu" \
 --loss-func "id+tri" \
 --branch main \
---sysu_mode "all" \
+--sysu-mode "all" \
 --part 3 \
---graph
+--graph \
+--epoch 40

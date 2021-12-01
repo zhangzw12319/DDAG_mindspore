@@ -122,13 +122,17 @@ class base_resnet(nn.Cell):
         self.base = resnet50_share(pretrain=pretrain)
 
     def construct(self, x):
-        # x = self.base.layer1(x)
-        # x = self.base.layer2(x)
-        # x = self.base.layer3(x)
-        # x = self.base.layer4(x)
-
         x = self.base(x)
+        return x
+    
 
+class ResNet50(nn.Cell):
+    def __init__(self, pretrain=""):
+        super(ResNet50, self).__init__()
+        self.resnet = resnet50(pretrain=pretrain)
+        
+    def construct(self, x):
+        x = self.resnet(x)
         return x
 
 
@@ -138,6 +142,7 @@ class embed_net(nn.Cell):
         self.thermal_module = thermal_module(arch=arch, pretrain=pretrain)
         self.visible_module = visible_module(arch=arch, pretrain=pretrain)
         self.base_resnet = base_resnet(arch=arch, pretrain=pretrain)
+        self.resnet50 = resnet50(pretrain=pretrain)
         pool_dim = 2048
         self.dropout = drop
         self.part = part
@@ -159,26 +164,41 @@ class embed_net(nn.Cell):
             self.wpa = IWPA(pool_dim, 3)
 
         self.cat = P.Concat()
+        self.logsoftmax = nn.LogSoftmax()
         
         if nheads > 0:
             self.graph_att = GraphAttentionLayer(class_num, nheads, pool_dim, low_dim, drop, alpha)
         else:
             self.graph_att = GraphAttentionLayer(class_num, 4, pool_dim, low_dim, drop, alpha)
 
+    # @profile
     def construct(self, x1, x2=None, adj=None, modal=0, cpa=False):
+        x = None
+        feat_att = None
+        out_att = None
+        out_graph = None
         
+        # if modal == 0:
+        #     x1 = self.visible_module(x1)
+        #     x2 = self.thermal_module(x2)
+        #     x = self.cat((x1, x2))
+        # elif modal == 1:
+        #     x = self.visible_module(x1)
+        # elif modal == 2:
+        #     x = self.thermal_module(x2)
+
+        # # shared four blocks
+        # # print("x.shape is ", x.shape)
+        # x = self.base_resnet(x) # N x 2048 x 9 x 5
+        
+        # modify version
         if modal == 0:
-            x1 = self.visible_module(x1)
-            x2 = self.thermal_module(x2)
             x = self.cat((x1, x2))
         elif modal == 1:
-            x = self.visible_module(x1)
-        elif modal == 2:
-            x = self.thermal_module(x2)
-
-        # shared four blocks
-        # print("x.shape is ", x.shape)
-        x = self.base_resnet(x) # N x 2048 x 9 x 5
+            x = x1
+        else:
+            x = x2
+        x = self.resnet50(x)
         # print("x.shape is ", x.shape)
         x_pool = self.avgpool(x, (2,3))
         # print("x_pool.shape is ", x_pool.shape)
@@ -194,7 +214,7 @@ class embed_net(nn.Cell):
         if self.training:
             if self.nheads > 0: 
                 # cross-modality graph attention
-                out_graph = nn.LogSoftmax()(self.graph_att(feat, adj))
+                out_graph = self.logsoftmax(self.graph_att(feat, adj))
             
             out = self.classifier(feat)
             # print("resnet classification output is", out)

@@ -192,27 +192,8 @@ class ResNet(nn.Cell):
         c3 = self.layer2(c2)
         c4 = self.layer3(c3)
         c5 = self.layer4(c4)
-        return c1, c2, c3, c4, c5
+        return c5
 
-def resnet50(pretrain=""):
-    """
-    Get ResNet50 neural network.
-    Returns:
-        Cell, cell instance of ResNet50 neural network.
-    Examples:
-        >>> net = resnet50()
-    """
-    resnet = ResNet(ResidualBlock,
-                  [3, 4, 6, 3],
-                  [64, 256, 512, 1024],
-                  [256, 512, 1024, 2048],
-                  [1, 2, 2, 2])
-    
-    if pretrain:
-        param_dict = load_checkpoint(pretrain)
-        load_param_into_net(resnet, param_dict)
-
-    return resnet
 
 class ResNet_Specific(nn.Cell):
     """
@@ -340,6 +321,27 @@ class ResNet_Share(nn.Cell):
         x = self.layer3(x)
         x = self.layer4(x)
         return x
+
+
+def resnet50(pretrain=""):
+    """
+    Get ResNet50 neural network.
+    Returns:
+        Cell, cell instance of ResNet50 neural network.
+    Examples:
+        >>> net = resnet50()
+    """
+    resnet = ResNet(ResidualBlock,
+                  [3, 4, 6, 3],
+                  [64, 256, 512, 1024],
+                  [256, 512, 1024, 2048],
+                  [1, 2, 2, 2])
+    
+    if pretrain:
+        param_dict = load_checkpoint(pretrain)
+        load_param_into_net(resnet, param_dict)
+
+    return resnet
 
 
 def resnet50_share(pretrain=""):

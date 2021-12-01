@@ -1,16 +1,13 @@
 export PATH=/usr/local/cuda-10.1/bin/:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda-10.1/lib/:$LD_LIBRARY_PATH
 
-python train_ddag.py \
+python test_ddag.py \
 --dataset SYSU \
---optim adam \
---lr 0.0035 \
 --gpu 2 \
 --device-target GPU \
---pretrain "model/pretrain/resnet50_ascend_v111_imagenet2012_official_cv_bs32_acc76/resnet50.ckpt" \
---tag "sysu_all_baseline" \
+--resume "logs/sysu_all_part_graph/training/epoch_25_rank1_59.84_mAP_57.31_SYSU_batch-size_2*8*4=64_adam_lr_0.0035_loss-func_id+tri_P_3_Graph__main.ckpt" \
+--tag "sysu_all_part_graph" \
 --data-path "/home/shz/pytorch/data/sysu" \
---loss-func "id+tri" \
 --branch main \
 --sysu-mode "all" \
---part 0
+--part 3

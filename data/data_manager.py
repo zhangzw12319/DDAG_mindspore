@@ -1,6 +1,7 @@
 from __future__ import print_function, absolute_import
 import os
 import sys
+import os.path as osp
 import numpy as np
 import random
 
@@ -10,7 +11,7 @@ def process_query_sysu(data_path, mode = 'all', relabel=False):
     elif mode =='indoor':
         ir_cameras = ['cam3','cam6']
     
-    file_path = os.path.join(data_path,'exp/test_id.txt')
+    file_path = osp.join(data_path,'exp/test_id.txt')
     files_rgb = []
     files_ir = []
 
@@ -21,8 +22,8 @@ def process_query_sysu(data_path, mode = 'all', relabel=False):
 
     for id in sorted(ids):
         for cam in ir_cameras:
-            img_dir = os.path.join(data_path,cam,id)
-            if os.path.isdir(img_dir):
+            img_dir = osp.join(data_path,cam,id)
+            if osp.isdir(img_dir):
                 new_files = sorted([img_dir+'/'+i for i in os.listdir(img_dir) if i[0] != '.'])
                 files_ir.extend(new_files)
     query_img = []
@@ -44,7 +45,7 @@ def process_gallery_sysu(data_path, mode = 'all', random_seed = 0, relabel=False
     elif mode =='indoor':
         rgb_cameras = ['cam1','cam2']
         
-    file_path = os.path.join(data_path,'exp/test_id.txt')
+    file_path = osp.join(data_path,'exp/test_id.txt')
     files_rgb = []
     with open(file_path, 'r') as file:
         ids = file.read().splitlines()
@@ -53,8 +54,8 @@ def process_gallery_sysu(data_path, mode = 'all', random_seed = 0, relabel=False
 
     for id in sorted(ids):
         for cam in rgb_cameras:
-            img_dir = os.path.join(data_path,cam,id)
-            if os.path.isdir(img_dir):
+            img_dir = osp.join(data_path,cam,id)
+            if osp.isdir(img_dir):
                 new_files = sorted([img_dir+'/'+i for i in os.listdir(img_dir) if i[0] != '.'])
                 files_rgb.append(random.choice(new_files))
     gall_img = []
