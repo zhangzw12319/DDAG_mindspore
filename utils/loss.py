@@ -120,9 +120,16 @@ class CenterTripletLoss(nn.Cell):
         """
 
         dim = input_.shape[1]
+        #################################
+        # The following 3 lines can work normaly in PYNATIVE_MODE,
+        # but have problems in GRAPH_MODE, due to different behavier
+        # of Unique() operation under two modes. We have reported this
+        # to official and wait for future fixes.
         label_uni = self.unique(label)[0]
         targets = self.cat([label_uni, label_uni]) # 2class_num
         label_num = label_uni.shape[0]
+        #################################
+        
         input_trans = input_.transpose() # [2048 , 64]
         # [2048 , 16, 4]
         input_trans = input_trans.view((input_trans.shape[0], 2 * label_num, input_trans.shape[1] // (2 * label_num) ))

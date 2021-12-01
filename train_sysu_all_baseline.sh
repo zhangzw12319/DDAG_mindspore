@@ -13,4 +13,5 @@ python train_ddag.py \
 --loss-func "id+tri" \
 --branch main \
 --sysu-mode "all" \
---part 0
+--part 0 \
+--epoch 40

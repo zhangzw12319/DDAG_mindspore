@@ -54,6 +54,7 @@ def show_memory_info(hint=""):
 
 def get_parser():
     parser = argparse.ArgumentParser(description="DDAG Code Mindspore Version")
+    parser.add_argument('--msmode', default='GRAPH_MODE', choices=['GRAPH_MODE', 'PYNATIVE_MODE'])
 
     # dataset settings
     parser.add_argument("--dataset", default='SYSU', choices=['SYSU', 'RegDB'],
@@ -149,8 +150,10 @@ if __name__ == "__main__":
     ########################################################################
     device = args.device_target
     # init context
-    context.set_context(mode=context.GRAPH_MODE, device_target=device, save_graphs=False)
-    # context.set_context(mode=context.PYNATIVE_MODE, device_target=device, save_graphs=False)
+    if args.msmode == 'GRAPH_MODE':
+        context.set_context(mode=context.GRAPH_MODE, device_target=device, save_graphs=False)
+    else:
+        context.set_context(mode=context.PYNATIVE_MODE, device_target=device)
 
     if device == "CPU":
         local_data_path = args.data_path

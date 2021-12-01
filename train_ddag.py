@@ -93,7 +93,7 @@ def get_parser():
 
 
     # loss setting
-    parser.add_argument('--epoch', default=80, type=int,
+    parser.add_argument('--epoch', default=40, type=int,
                         metavar='epoch', help='epoch num')
     parser.add_argument('--start-epoch', default=1, type=int)
     parser.add_argument('--loss-func', default='id+tri', type=str, choices=['id', 'tri', 'id+tri'],
