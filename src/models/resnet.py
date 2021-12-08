@@ -33,6 +33,7 @@ def _conv1x1(in_channel, out_channel, stride=1):
 def _conv7x7(in_channel, out_channel, stride=1):
     return nn.Conv2d(in_channel, out_channel, kernel_size=7, stride=stride, padding=0, pad_mode='same')
 
+
 def _bn(channel):
     return nn.BatchNorm2d(channel, eps=1e-5, momentum=0.9,
                           gamma_init=1, beta_init=0, moving_mean_init=0, moving_var_init=1)
@@ -41,6 +42,7 @@ def _bn(channel):
 def _bn_last(channel):
     return nn.BatchNorm2d(channel, eps=1e-3, momentum=0.997,
                           gamma_init=0, beta_init=0, moving_mean_init=0, moving_var_init=1)
+
 
 class ResidualBlock(nn.Cell):
     """
@@ -79,10 +81,14 @@ class ResidualBlock(nn.Cell):
         self.down_sample_layer = None
 
         if self.down_sample:
-            self.down_sample_layer = nn.SequentialCell([_conv1x1(in_channel, out_channel, stride), _bn(out_channel)])
+            self.down_sample_layer = nn.SequentialCell(
+                [_conv1x1(in_channel, out_channel, stride), _bn(out_channel)])
         self.add = P.Add()
 
     def construct(self, x):
+        """
+        function of constructing
+        """
         identity = x
 
         out = self.conv1(x)
@@ -133,7 +139,8 @@ class ResNet(nn.Cell):
         super(ResNet, self).__init__()
 
         if not len(layer_nums) == len(in_channels) == len(out_channels) == 4:
-            raise ValueError("the length of layer_num, in_channels, out_channels list must be 4!")
+            raise ValueError(
+                "the length of layer_num, in_channels, out_channels list must be 4!")
         self.conv1 = _conv7x7(3, 64, stride=2)
         self.bn1 = _bn(64)
         self.relu = P.ReLU()
@@ -183,6 +190,9 @@ class ResNet(nn.Cell):
         return nn.SequentialCell(layers)
 
     def construct(self, x):
+        """
+        function of constructing
+        """
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -225,10 +235,12 @@ class ResNet_Specific(nn.Cell):
         super(ResNet_Specific, self).__init__()
 
         if not len(layer_nums) == len(in_channels) == len(out_channels) == 4:
-            raise ValueError("the length of layer_num, in_channels, out_channels list must be 4!")
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, pad_mode='pad')
+            raise ValueError(
+                "the length of layer_num, in_channels, out_channels list must be 4!")
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7,
+                               stride=2, padding=3, pad_mode='pad')
         self.bn1 = nn.BatchNorm2d(64, eps=1e-5,
-                          gamma_init=1, beta_init=0, moving_mean_init=0, moving_var_init=1)
+                                  gamma_init=1, beta_init=0, moving_mean_init=0, moving_var_init=1)
         self.relu = P.ReLU()
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, pad_mode="same")
 
@@ -270,7 +282,8 @@ class ResNet_Share(nn.Cell):
         super(ResNet_Share, self).__init__()
 
         if not len(layer_nums) == len(in_channels) == len(out_channels) == 4:
-            raise ValueError("the length of layer_num, in_channels, out_channels list must be 4!")
+            raise ValueError(
+                "the length of layer_num, in_channels, out_channels list must be 4!")
         self.layer1 = self._make_layer(block,
                                        layer_nums[0],
                                        in_channel=in_channels[0],
@@ -332,11 +345,11 @@ def resnet50(pretrain=""):
         >>> net = resnet50()
     """
     resnet = ResNet(ResidualBlock,
-                  [3, 4, 6, 3],
-                  [64, 256, 512, 1024],
-                  [256, 512, 1024, 2048],
-                  [1, 2, 2, 2])
-    
+                    [3, 4, 6, 3],
+                    [64, 256, 512, 1024],
+                    [256, 512, 1024, 2048],
+                    [1, 2, 2, 2])
+
     if pretrain:
         param_dict = load_checkpoint(pretrain)
         load_param_into_net(resnet, param_dict)
@@ -353,17 +366,17 @@ def resnet50_share(pretrain=""):
         >>> net = resnet50()
     """
     resnet = ResNet_Share(ResidualBlock,
-                  [3, 4, 6, 3],
-                  [64, 256, 512, 1024],
-                  [256, 512, 1024, 2048],
-                  [1, 2, 2, 2])
-    
+                          [3, 4, 6, 3],
+                          [64, 256, 512, 1024],
+                          [256, 512, 1024, 2048],
+                          [1, 2, 2, 2])
+
     if pretrain:
         param_dict = load_checkpoint(pretrain)
         load_param_into_net(resnet, param_dict)
-    
+
     return resnet
-    
+
 
 def resnet50_specific(pretrain=""):
     """
@@ -374,10 +387,10 @@ def resnet50_specific(pretrain=""):
         >>> net = resnet50()
     """
     resnet = ResNet_Specific(ResidualBlock,
-                  [3, 4, 6, 3],
-                  [64, 256, 512, 1024],
-                  [256, 512, 1024, 2048],
-                  [1, 2, 2, 2])
+                             [3, 4, 6, 3],
+                             [64, 256, 512, 1024],
+                             [256, 512, 1024, 2048],
+                             [1, 2, 2, 2])
     if pretrain:
         param_dict = load_checkpoint(pretrain)
         load_param_into_net(resnet, param_dict)

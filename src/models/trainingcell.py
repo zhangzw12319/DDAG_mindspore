@@ -1,3 +1,4 @@
+"""trainingcell.py"""
 import os
 import psutil
 import numpy as np
@@ -5,10 +6,9 @@ import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as P
 from mindspore import ParameterTuple, Tensor, Parameter
-from mindspore.nn import WithLossCell
+# from mindspore.nn import WithLossCell
+# from IPython import embed
 
-
-from IPython import embed
 
 def show_memory_info(hint=""):
     pid = os.getpid()
@@ -18,7 +18,11 @@ def show_memory_info(hint=""):
     memory = info.uss/1024./1024
     print(f"{hint} memory used: {memory} MB ")
 
+
 class CriterionWithNet(nn.Cell):
+    """
+    class of criterion with network
+    """
     def __init__(self, backbone, ce_loss, tri_loss, lossFunc='id'):
         super(CriterionWithNet, self).__init__()
         self._backbone = backbone
@@ -28,7 +32,7 @@ class CriterionWithNet(nn.Cell):
         self.acc = Parameter(Tensor(np.array([0]), dtype=ms.float32))
         self.total_loss = Parameter(Tensor(np.array([0]), dtype=ms.float32))
         self.wg = Parameter(Tensor(np.array([0]), dtype=ms.float32))
-        
+
         # self.total_loss = 0.0
         # self.wg = 0.0
 
@@ -38,14 +42,18 @@ class CriterionWithNet(nn.Cell):
         self.max = P.ArgMaxWithValue(axis=1)
         self.eq = P.Equal()
 
-    def construct(self, img1, img2, label1, label2,  adj, modal=0, cpa=False):
-
+    def construct(self, img1, img2, label1, label2, adj, modal=0, cpa=False):
+        """
+        function of constructing
+        """
         out_graph = None
-       
+
         if self._backbone.nheads > 0:
-            feat, _ , out, out_att, out_graph = self._backbone(img1, x2=img2, adj=adj, modal=modal, cpa=False)
+            feat, _, out, out_att, out_graph = self._backbone(
+                img1, x2=img2, adj=adj, modal=modal, cpa=False)
         else:
-            feat, _ , out, out_att = self._backbone(img1, x2=img2, modal=modal, cpa=False)
+            feat, _, out, out_att = self._backbone(
+                img1, x2=img2, modal=modal, cpa=False)
 
         label = self.cat((label1, label2))
         label_ = self.cast(label, ms.int32)
@@ -65,11 +73,12 @@ class CriterionWithNet(nn.Cell):
             loss_total = loss_total + loss_p
 
         if self._backbone.nheads > 0:
-            loss_g = P.NLLLoss("mean")(out_graph, label_, P.Ones()((out_graph.shape[1]), ms.float32))
+            loss_g = P.NLLLoss("mean")(out_graph, label_,
+                                       P.Ones()((out_graph.shape[1]), ms.float32))
             loss_total = loss_total + self.wg * loss_g[0]
-  
-        predict , _ = self.max(out)
-        correct = self.eq(predict, label_)
+
+        # predict, _ = self.max(out)
+        # correct = self.eq(predict, label_)
         # self.acc = ms.numpy.array([ms.numpy.where(correct)[0].shape[0] / label_.shape[0]])
         self.total_loss = loss_total
 
@@ -79,7 +88,11 @@ class CriterionWithNet(nn.Cell):
     def backbone_network(self):
         return self._backbone
 
+
 class OptimizerWithNetAndCriterion(nn.Cell):
+    """
+    class of optimization methods
+    """
     def __init__(self, network, optimizer):
         super(OptimizerWithNetAndCriterion, self).__init__()
         self.network = network

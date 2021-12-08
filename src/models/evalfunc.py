@@ -1,14 +1,14 @@
-import mindspore as ms
-import mindspore.nn as nn
-import mindspore.ops as P
-import numpy as np
-import time
+"""eval.py"""
 import os
+import time
+import numpy as np
 import psutil
+# import mindspore as ms
+# import mindspore.nn as nn
+# import mindspore.ops as P
+# from mindspore import DatasetHelper
+# from IPython import embed
 
-from mindspore import DatasetHelper
-
-from IPython import embed
 
 def show_memory_info(hint=""):
     pid = os.getpid()
@@ -18,9 +18,12 @@ def show_memory_info(hint=""):
     memory = info.uss/1024./1024
     print(f"{hint} memory used: {memory} MB ")
 
+
 def test(args, gallery, query, ngall, nquery,
          backbone, gall_modal, gallery_cam=None, query_cam=None):
-
+    """
+    function of test
+    """
     print('Extracting Gallery Feature...')
     start = time.time()
     ptr = 0
@@ -32,9 +35,9 @@ def test(args, gallery, query, ngall, nquery,
     for (img, label) in gallery:
         feat, feat_att = backbone(img, img, None, gall_modal)
         size = int(feat.shape[0])
-        gall_feat[ptr:ptr + size, : ] = feat.asnumpy()
+        gall_feat[ptr:ptr + size, :] = feat.asnumpy()
         gall_label[ptr:ptr + size] = label.asnumpy()
-        gall_feat_att[ptr:ptr + size, : ] = feat_att.asnumpy()
+        gall_feat_att[ptr:ptr + size, :] = feat_att.asnumpy()
         ptr = ptr + size
     print('Extracting Time:\t {:.3f}'.format(time.time() - start))
     # print("gallery label:", gall_label)
@@ -59,10 +62,11 @@ def test(args, gallery, query, ngall, nquery,
     distmat = np.matmul(query_feat, np.transpose(gall_feat))
     distmat_att = np.matmul(query_feat_att, np.transpose(gall_feat_att))
 
-
     if args.dataset == "SYSU":
-        cmc, mAP = eval_sysu(-distmat, query_label, gall_label, query_cam, gallery_cam)
-        cmc_att, mAP_att = eval_sysu(-distmat_att, query_label, gall_label, query_cam, gallery_cam)
+        cmc, mAP = eval_sysu(-distmat, query_label,
+                             gall_label, query_cam, gallery_cam)
+        cmc_att, mAP_att = eval_sysu(-distmat_att,
+                                     query_label, gall_label, query_cam, gallery_cam)
 
     elif args.dataset == "RegDB":
         cmc, mAP = eval_regdb(-distmat, query_label, gall_label)
@@ -73,7 +77,8 @@ def test(args, gallery, query, ngall, nquery,
 
 def eval_sysu(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=20):
     """Evaluation with sysu metric
-    Key: for each query identity, its gallery images from the same camera view are discarded. "Following the original setting in ite dataset"
+    Key: for each query identity, its gallery images from the same camera
+    view are discarded. "Following the original setting in ite dataset"
     """
     num_q, num_g = distmat.shape
     if num_g < max_rank:
@@ -110,7 +115,8 @@ def eval_sysu(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=20):
         new_cmc = new_match.cumsum()
         new_all_cmc.append(new_cmc[:max_rank])
 
-        orig_cmc = matches[q_idx][keep]  # binary vector, positions with value 1 are correct matches
+        # binary vector, positions with value 1 are correct matches
+        orig_cmc = matches[q_idx][keep]
         if not np.any(orig_cmc):
             # this condition is true when query identity does not appear in gallery
             continue
@@ -146,10 +152,14 @@ def eval_sysu(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=20):
     new_all_cmc = np.asarray(new_all_cmc).astype(np.float32)
     new_all_cmc = new_all_cmc.sum(0) / num_valid_q
     mAP = np.mean(all_AP)
-    mINP = np.mean(all_INP)
+    # mINP = np.mean(all_INP)
     return new_all_cmc, mAP
 
+
 def eval_regdb(distmat, q_pids, g_pids, max_rank=20):
+    """
+    function of eval_regdb
+    """
     num_q, num_g = distmat.shape
     if num_g < max_rank:
         max_rank = num_g
@@ -178,7 +188,8 @@ def eval_regdb(distmat, q_pids, g_pids, max_rank=20):
         keep = np.invert(remove)
 
         # compute cmc curve
-        raw_cmc = matches[q_idx][keep]  # binary vector, positions with value 1 are correct matches
+        # binary vector, positions with value 1 are correct matches
+        raw_cmc = matches[q_idx][keep]
         if not np.any(raw_cmc):
             # this condition is true when query identity does not appear in gallery
             continue
@@ -211,5 +222,5 @@ def eval_regdb(distmat, q_pids, g_pids, max_rank=20):
     all_cmc = np.asarray(all_cmc).astype(np.float32)
     all_cmc = all_cmc.sum(0) / num_valid_q
     mAP = np.mean(all_AP)
-    mINP = np.mean(all_INP)
+    # mINP = np.mean(all_INP)
     return all_cmc, mAP

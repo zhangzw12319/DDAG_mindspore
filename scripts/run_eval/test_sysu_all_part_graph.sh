@@ -1,11 +1,20 @@
 export PATH=/usr/local/cuda-10.1/bin/:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda-10.1/lib/:$LD_LIBRARY_PATH
 
-python test_ddag.py \
+myfile="test_sysu_all_part_graph.sh"
+
+if [! -f "$myfile"]; then
+    echo "Please first enter DDAG_mindspore/scripts/run_standalone_train and run. Exit..."
+    exit 0
+fi
+
+cd ../..
+
+python eval.py \
 --dataset SYSU \
---gpu 2 \
+--gpu 3 \
 --device-target GPU \
---resume "logs/sysu_all_part_graph/training/epoch_25_rank1_59.84_mAP_57.31_SYSU_batch-size_2*8*4=64_adam_lr_0.0035_loss-func_id+tri_P_3_Graph__main.ckpt" \
+--pretrain "resnet50.ckpt"
 --tag "sysu_all_part_graph" \
 --data-path "/home/shz/pytorch/data/sysu" \
 --branch main \

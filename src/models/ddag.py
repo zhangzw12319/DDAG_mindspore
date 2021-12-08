@@ -1,16 +1,16 @@
-from unicodedata import normalize
+"""model_main.py"""
+# from unicodedata import normalize
+# import os
+import numpy as np
 import mindspore as ms
 import mindspore.nn as nn
 import mindspore.common.initializer as init
 import mindspore.ops as P
 from mindspore.common.initializer import Initializer, _assignment, random_normal
-from model.resnet import *
-from model.attention import IWPA, GraphAttentionLayer
-
-import os
-import numpy as np
-import psutil
-from IPython import embed
+from src.models.resnet import resnet50, resnet50_share, resnet50_specific
+from src.models.attention import IWPA, GraphAttentionLayer
+# import psutil
+# from IPython import embed
 
 # def show_memory_info(hint=""):
 #     pid = os.getpid()
@@ -19,6 +19,7 @@ from IPython import embed
 #     info = p.memory_full_info()
 #     memory = info.uss/1024./1024
 #     print(f"{hint} memory used: {memory} MB ")
+
 
 class Normal_with_mean(Initializer):
     """
@@ -31,6 +32,7 @@ class Normal_with_mean(Initializer):
     Returns:
         Array, normal array.
     """
+
     def __init__(self, mu=0, sigma=0.01):
         super(Normal_with_mean, self).__init__(sigma=sigma)
         self.mu = mu
@@ -38,31 +40,51 @@ class Normal_with_mean(Initializer):
 
     def _initialize(self, arr):
         seed, seed2 = self.seed
-        output_tensor = ms.Tensor(np.zeros(arr.shape, dtype=np.float32) + np.ones(arr.shape, dtype=np.float32) * self.mu)
+        output_tensor = ms.Tensor(np.zeros(
+            arr.shape, dtype=np.float32) + np.ones(arr.shape, dtype=np.float32) * self.mu)
         random_normal(arr.shape, seed, seed2, output_tensor)
         output_data = output_tensor.asnumpy()
         output_data *= self.sigma
         _assignment(arr, output_data)
 
+
 def weights_init_kaiming(m):
+    """
+    function of weights_init_kaiming
+    """
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        m.weight.set_data(init.initializer(init.HeNormal(negative_slope=0, mode='fan_in'), m.weight.shape, m.weight.dtype))
+        m.weight.set_data(init.initializer(init.HeNormal(
+            negative_slope=0, mode='fan_in'), m.weight.shape, m.weight.dtype))
     elif classname.find('Linear') != -1:
-        m.weight.set_data(init.initializer(init.HeNormal(negative_slope=0, mode='fan_out'), m.weight.shape, m.weight.dtype))
-        m.bias.set_data(init.initializer(init.Zero(), m.bias.shape, m.bias.dtype))
+        m.weight.set_data(init.initializer(init.HeNormal(
+            negative_slope=0, mode='fan_out'), m.weight.shape, m.weight.dtype))
+        m.bias.set_data(init.initializer(
+            init.Zero(), m.bias.shape, m.bias.dtype))
     elif classname.find('BatchNorm1d') != -1:
-        m.gamma.set_data(init.initializer(Normal_with_mean(mu=1, sigma=0.01), m.gamma.shape, m.gamma.dtype))
-        m.beta.set_data(init.initializer(init.Zero(), m.beta.shape, m.beta.dtype))
+        m.gamma.set_data(init.initializer(Normal_with_mean(
+            mu=1, sigma=0.01), m.gamma.shape, m.gamma.dtype))
+        m.beta.set_data(init.initializer(
+            init.Zero(), m.beta.shape, m.beta.dtype))
+
 
 def weights_init_classifier(m):
+    """
+    function of weights_init_classifier
+    """
     classname = m.__class__.__name__
     if classname.find('Linear') != -1:
-        m.gamma.set_data(init.initializer(init.Normal(sigma=0.001), m.gamma.shape, m.gamma.dtype))
+        m.gamma.set_data(init.initializer(init.Normal(
+            sigma=0.001), m.gamma.shape, m.gamma.dtype))
         if m.bias:
-            m.bias.set_data(init.initializer(init.Zero(), m.bias.shape, m.bias.dtype))
+            m.bias.set_data(init.initializer(
+                init.Zero(), m.bias.shape, m.bias.dtype))
+
 
 class Normalize(nn.Cell):
+    """
+    class of normalize
+    """
     def __init__(self, power=2):
         super(Normalize, self).__init__()
         self.power = power
@@ -79,12 +101,15 @@ class Normalize(nn.Cell):
 
 
 class visible_module(nn.Cell):
+    """
+    class of visible module
+    """
     def __init__(self, arch="resnet50", pretrain=""):
         super(visible_module, self).__init__()
 
         # self.visible = resnet50(pretrain=pretrain)
         self.visible = resnet50_specific(pretrain=pretrain)
-        
+
     def construct(self, x):
         # x = self.visible.conv1(x)
         # x = self.visible.bn1(x)
@@ -97,6 +122,9 @@ class visible_module(nn.Cell):
 
 
 class thermal_module(nn.Cell):
+    """
+    class of thermal_module
+    """
     def __init__(self, arch="resnet50", pretrain=""):
         super(thermal_module, self).__init__()
 
@@ -124,19 +152,22 @@ class base_resnet(nn.Cell):
     def construct(self, x):
         x = self.base(x)
         return x
-    
+
 
 class ResNet50(nn.Cell):
     def __init__(self, pretrain=""):
         super(ResNet50, self).__init__()
         self.resnet = resnet50(pretrain=pretrain)
-        
+
     def construct(self, x):
         x = self.resnet(x)
         return x
 
 
 class embed_net(nn.Cell):
+    """
+    class of embed_net
+    """
     def __init__(self, low_dim, class_num=200, drop=0.2, part=0, alpha=0.2, nheads=4, arch="resnet50", pretrain=""):
         super(embed_net, self).__init__()
         self.thermal_module = thermal_module(arch=arch, pretrain=pretrain)
@@ -151,7 +182,7 @@ class embed_net(nn.Cell):
 
         self.l2norm = Normalize(2)
         self.bottleneck = nn.BatchNorm1d(num_features=pool_dim)
-        self.bottleneck.requires_grad=False
+        self.bottleneck.requires_grad = False
         self.classifier = nn.Dense(pool_dim, class_num, has_bias=False)
 
         weights_init_kaiming(self.bottleneck)
@@ -165,19 +196,24 @@ class embed_net(nn.Cell):
 
         self.cat = P.Concat()
         self.logsoftmax = nn.LogSoftmax()
-        
+
         if nheads > 0:
-            self.graph_att = GraphAttentionLayer(class_num, nheads, pool_dim, low_dim, drop, alpha)
+            self.graph_att = GraphAttentionLayer(
+                class_num, nheads, pool_dim, low_dim, drop, alpha)
         else:
-            self.graph_att = GraphAttentionLayer(class_num, 4, pool_dim, low_dim, drop, alpha)
+            self.graph_att = GraphAttentionLayer(
+                class_num, 4, pool_dim, low_dim, drop, alpha)
 
     # @profile
     def construct(self, x1, x2=None, adj=None, modal=0, cpa=False):
+        """
+        function of constructing
+        """
         x = None
         feat_att = None
         out_att = None
         out_graph = None
-        
+
         # if modal == 0:
         #     x1 = self.visible_module(x1)
         #     x2 = self.thermal_module(x2)
@@ -190,7 +226,7 @@ class embed_net(nn.Cell):
         # # shared four blocks
         # # print("x.shape is ", x.shape)
         # x = self.base_resnet(x) # N x 2048 x 9 x 5
-        
+
         # modify version
         if modal == 0:
             x = self.cat((x1, x2))
@@ -200,22 +236,22 @@ class embed_net(nn.Cell):
             x = x2
         x = self.resnet50(x)
         # print("x.shape is ", x.shape)
-        x_pool = self.avgpool(x, (2,3))
+        x_pool = self.avgpool(x, (2, 3))
         # print("x_pool.shape is ", x_pool.shape)
         x_pool = x_pool.view(x_pool.shape[0], x_pool.shape[1])
         # print("After Reshape:", x_pool.shape)
         # print("x_pool is :", x_pool)
-        feat = self.bottleneck(x_pool) # mindspore version >=1.3.0
+        feat = self.bottleneck(x_pool)  # mindspore version >=1.3.0
 
         if self.part > 0:
             # intra_modality weighted part attention
             feat_att = self.wpa(x, feat, 1)
 
         if self.training:
-            if self.nheads > 0: 
+            if self.nheads > 0:
                 # cross-modality graph attention
                 out_graph = self.logsoftmax(self.graph_att(feat, adj))
-            
+
             out = self.classifier(feat)
             # print("resnet classification output is", out)
             if self.part > 0:
@@ -224,21 +260,19 @@ class embed_net(nn.Cell):
 
             if (self.part > 0) and (self.nheads > 0):
                 return feat, feat_att, out, out_att, out_graph
-            
+
             if self.nheads > 0:
-                return feat, feat, out, out, out_graph                
-            
+                return feat, feat, out, out, out_graph
+
             if self.part > 0:
                 return feat, feat_att, out, out_att
-            else:
-                return feat, feat, out, out # just for debug
+            return feat, feat, out, out  # just for debug
 
         else:
             if self.part > 0:
                 return self.l2norm(feat), self.l2norm(feat_att)
-            else:
-                return self.l2norm(feat), self.l2norm(feat) # just for debug
-            
+            return self.l2norm(feat), self.l2norm(feat)  # just for debug
+
     def create_graph(self, target1, target2):
         """
         Graph Construction
@@ -246,8 +280,9 @@ class embed_net(nn.Cell):
         target = P.Cast()(self.cat([target1, target2]), ms.int32)
         one_hot = P.Gather()(P.Eye()(self.class_num, self.class_num, ms.float32), target, 0)
         one_hot_tran = one_hot.transpose()
-        adj = ms.ops.matmul(one_hot, one_hot_tran) + P.Eye()(target.shape[0], target.shape[0], ms.float32)
+        adj = ms.ops.matmul(one_hot, one_hot_tran) + \
+            P.Eye()(target.shape[0], target.shape[0], ms.float32)
         # adjacent matrix normalize
-        norm = P.Pow()(P.Pow()(adj, 2).sum(axis=1, keepdims=True), 1. /2)
+        norm = P.Pow()(P.Pow()(adj, 2).sum(axis=1, keepdims=True), 1. / 2)
         adj_norm = P.Div()(adj, norm)
         return adj_norm

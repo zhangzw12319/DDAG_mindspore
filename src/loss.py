@@ -1,13 +1,20 @@
-import os
-import psutil
+"""
+loss.py
+"""
+# import os
+# import psutil
+import numpy as np
 import mindspore as ms
 import mindspore.nn as nn
 import mindspore.ops as P
-import numpy as np
 from mindspore import Tensor, context
-import mindspore.numpy as mindnp
+# import mindspore.numpy as mindnp
+
 
 class MarginRankingLoss(nn.Cell):
+    """
+    class of MarginRankingLoss
+    """
     def __init__(self, margin=0, error_msg=None):
         super(MarginRankingLoss, self).__init__()
         self.margin = margin
@@ -27,6 +34,7 @@ class MarginRankingLoss(nn.Cell):
 
         loss = self.mean(temp3 * temp3_mask)
         return loss
+
 
 class OriTripletLoss(nn.Cell):
     """Triplet loss with hard positive/negative mining.
@@ -69,8 +77,7 @@ class OriTripletLoss(nn.Cell):
         - targets: ground truth labels with shape (num_classes)
         """
 
-        bs = inputs.shape[0]
-        
+        # bs = inputs.shape[0]
 
         # Compute pairwise distance, replace by the official when merged
         dist = self.pow(inputs, 2)
@@ -81,15 +88,20 @@ class OriTripletLoss(nn.Cell):
         temp1 = self.matmul(inputs, self.transpose(inputs, (1, 0)))
         temp1 = self.mul(-2, temp1)
         dist = self.add(dist, temp1)
-        dist = P.composite.clip_by_value(dist, clip_value_min=1e-12, clip_value_max=100000000)  # for numerical stability, clip_value_max=? why must set?
+        # for numerical stability, clip_value_max=? why must set?
+        dist = P.composite.clip_by_value(
+            dist, clip_value_min=1e-12, clip_value_max=100000000)
         dist = self.sqrt(dist)
 
         # For each anchor, find the hardest positive and negative
         targets = self.expand(targets)
-        mask_pos = self.cast(self.equal(targets, self.transpose(targets, (1, 0))), ms.int8)
-        mask_neg = self.cast(self.notequal(targets, self.transpose(targets, (1, 0))), ms.int8)
+        mask_pos = self.cast(self.equal(
+            targets, self.transpose(targets, (1, 0))), ms.int8)
+        mask_neg = self.cast(self.notequal(
+            targets, self.transpose(targets, (1, 0))), ms.int8)
         dist_ap = self.max(dist * mask_pos, 1).squeeze()
-        dist_an = self.min(self.max(dist * mask_neg, 1) * mask_pos + dist, 1).squeeze()
+        dist_an = self.min(self.max(dist * mask_neg, 1)
+                           * mask_pos + dist, 1).squeeze()
 
         # Compute ranking hinge loss
         y = self.ones_like(dist_an)
@@ -101,16 +113,19 @@ class OriTripletLoss(nn.Cell):
 
 
 class CenterTripletLoss(nn.Cell):
+    """
+    class of center triplet loss
+    """
 
     def __init__(self, batch_size, margin=0.3):
         super(CenterTripletLoss, self).__init__()
         self.batch_size = batch_size
         self.margin = margin
-        self.OriTripletLoss = OriTripletLoss(batch_size=batch_size // 4, margin=margin)
+        self.OriTripletLoss = OriTripletLoss(
+            batch_size=batch_size // 4, margin=margin)
         self.unique = P.Unique()
         self.cat = P.Concat()
         self.mean = P.ReduceMean(keep_dims=False)
-        
 
     def construct(self, input_, label):
         """
@@ -119,39 +134,43 @@ class CenterTripletLoss(nn.Cell):
         - label: ground truth labels with shape (num_classes)
         """
 
-        dim = input_.shape[1]
+        # dim = input_.shape[1]
         #################################
         # The following 3 lines can work normaly in PYNATIVE_MODE,
         # but have problems in GRAPH_MODE, due to different behavier
         # of Unique() operation under two modes. We have reported this
         # to official and wait for future fixes.
         label_uni = self.unique(label)[0]
-        targets = self.cat([label_uni, label_uni]) # 2class_num
+        targets = self.cat([label_uni, label_uni])  # 2class_num
         label_num = label_uni.shape[0]
         #################################
-        
-        input_trans = input_.transpose() # [2048 , 64]
+
+        input_trans = input_.transpose()  # [2048 , 64]
         # [2048 , 16, 4]
-        input_trans = input_trans.view((input_trans.shape[0], 2 * label_num, input_trans.shape[1] // (2 * label_num) ))
+        input_trans = input_trans.view(
+            (input_trans.shape[0], 2 * label_num, input_trans.shape[1] // (2 * label_num)))
         centers = P.ReduceMean()(input_trans, 2)
         new_input = centers.transpose()
         loss = self.OriTripletLoss(new_input, targets)
-        
+
         return loss
 
 
 if __name__ == "__main__":
-    context.set_context(mode=context.GRAPH_MODE, device_target="GPU", save_graphs=False)
+    context.set_context(mode=context.GRAPH_MODE,
+                        device_target="GPU", save_graphs=False)
     # context.set_context(mode=context.PYNATIVE_MODE, device_target="GPU", save_graphs=False)
     lossNet = OriTripletLoss(margin=0.3, batch_size=2 * 32)
-    data = np.load("/home/shz/pytorch/shz/DDAG_mindspore_zzw/batchdata.npy", allow_pickle=True)
-    label = np.load("/home/shz/pytorch/shz/DDAG_mindspore_zzw/batchlabel.npy", allow_pickle=True)
+    data = np.load(
+        "/home/shz/pytorch/shz/DDAG_mindspore_zzw/batchdata.npy", allow_pickle=True)
+    label_info = np.load(
+        "/home/shz/pytorch/shz/DDAG_mindspore_zzw/batchlabel.npy", allow_pickle=True)
     print(data)
-    print(label)
+    print(label_info)
     data = Tensor(data, dtype=ms.float32)
-    label = Tensor(label, dtype=ms.int32)
+    label_info = Tensor(label_info, dtype=ms.int32)
     print("Before")
 
-    loss = lossNet(data, label)
+    loss_info = lossNet(data, label_info)
     print("After")
-    print(loss)
+    print(loss_info)

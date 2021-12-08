@@ -1,9 +1,12 @@
+"""utils.py"""
 import os
 import os.path as osp
 import sys
 import numpy as np
+import mindspore as ms
 import mindspore.dataset as ds
 import mindspore.nn as nn
+import mindspore.ops as P
 
 from mindspore import Tensor
 
@@ -37,15 +40,17 @@ def genidx(train_color_label, train_thermal_label):
     color_pos = []
     unique_label_color = np.unique(train_color_label)
     for i in range(len(unique_label_color)):
-        tmp_pos = [k for k,v in enumerate(train_color_label) if v==unique_label_color[i]]
+        tmp_pos = [k for k, v in enumerate(
+            train_color_label) if v == unique_label_color[i]]
         color_pos.append(tmp_pos)
 
     thermal_pos = []
     unique_label_thermal = np.unique(train_thermal_label)
     for i in range(len(unique_label_thermal)):
-        tmp_pos = [k for k,v in enumerate(train_thermal_label) if v==unique_label_thermal[i]]
+        tmp_pos = [k for k, v in enumerate(
+            train_thermal_label) if v == unique_label_thermal[i]]
         thermal_pos.append(tmp_pos)
-    
+
     return color_pos, thermal_pos
 
 
@@ -57,7 +62,7 @@ class IdentitySampler(ds.Sampler):
             batchSize: batch size
     """
 
-    def __init__(self, train_color_label, train_thermal_label, color_pos, thermal_pos, num_pos, batchSize):        
+    def __init__(self, train_color_label, train_thermal_label, color_pos, thermal_pos, num_pos, batchSize):
         super(IdentitySampler, self).__init__()
         # np.random.seed(0)
         uni_label = np.unique(train_color_label)
@@ -66,31 +71,35 @@ class IdentitySampler(ds.Sampler):
         for j in range(int(N/(batchSize * num_pos))+1):
             batch_idx = np.random.choice(uni_label, batchSize, replace=False)
             for i in range(batchSize):
-                sample_color = np.random.choice(color_pos[batch_idx[i]], num_pos)
-                sample_thermal = np.random.choice(thermal_pos[batch_idx[i]], num_pos)
-                
+                sample_color = np.random.choice(
+                    color_pos[batch_idx[i]], num_pos)
+                sample_thermal = np.random.choice(
+                    thermal_pos[batch_idx[i]], num_pos)
+
                 if j == 0 and i == 0:
                     index1 = sample_color
                     index2 = sample_thermal
                 else:
                     index1 = np.hstack((index1, sample_color))
                     index2 = np.hstack((index2, sample_thermal))
-        
+
         self.index1 = index1
         self.index2 = index2
         self.N = N
         self.num_samples = N
-        
+
     def __iter__(self):
-        # return iter(np.arange(len(self.index1))) 
+        # return iter(np.arange(len(self.index1)))
         for i in range(len(self.index1)):
             yield i
-        
+
     def __len__(self):
         return self.N
 
-class AverageMeter(object):
+
+class AverageMeter():
     """Computers and stores the average & current value"""
+
     def __init__(self):
         self.reset()
 
@@ -100,11 +109,12 @@ class AverageMeter(object):
         self.sum = 0
         self.count = 0
 
-    def update(self, val,n=1):
+    def update(self, val, n=1):
         self.val = val
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
+
 
 def mkdir_if_missing(directory):
     if not osp.exists(directory):
@@ -114,11 +124,13 @@ def mkdir_if_missing(directory):
             if e.errno != errno.EEXIST:
                 raise
 
-class Logger(object):
+
+class Logger():
     """
     Write console output to external text file.
     Code imported from https://github.com/Cysu/open-reid/blob/master/reid/utils/logging.py.
     """
+
     def __init__(self, fpath=None):
         self.console = sys.stdout
         self.file = None
@@ -150,3 +162,45 @@ class Logger(object):
         self.console.close()
         if self.file is not None:
             self.file.close()
+
+
+class LRScheduler(nn.Cell):
+    r"""
+    Gets learning rate warming up + decay.
+
+    Args:
+        learning_rate (float): The initial value of learning rate.
+        warmup_steps (int): The warm up steps of learning rate.
+        weight_decay (int): The weight decay steps of learning rate.
+
+    Inputs:
+        Tensor. The current step number.
+
+    Outputs:
+        Tensor. The learning rate value for the current step.
+
+    Supported Platforms:
+        ``Ascend`` ``GPU``
+
+    """
+
+    def __init__(self, learning_rate, warmup_steps=0, weight_decay=[]):
+        super(LRScheduler, self).__init__()
+        self.warmup_steps = warmup_steps
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.min = P.Minimum()
+        self.cast = P.Cast()
+
+    def construct(self, global_step):
+        if global_step < self.warmup_steps:
+            warmup_percent = self.cast(
+                self.min(global_step, self.warmup_steps), ms.float32) / self.warmup_steps
+            return self.learning_rate * warmup_percent
+        lr = self.learning_rate
+        for decay in self.weight_decay:
+            if global_step <= decay:
+                break
+            lr = lr * 0.1
+        lr = self.cast(lr, ms.float32)
+        return lr
