@@ -22,10 +22,10 @@ from mindspore import context, load_checkpoint, load_param_into_net, DatasetHelp
 from mindspore.context import ParallelMode
 from mindspore.communication.management import init, get_group_size
 from mindspore.dataset.transforms.py_transforms import Compose
-from data.data_loader import SYSUDatasetGenerator, RegDBDatasetGenerator, TestData
-from data.data_manager import process_gallery_sysu, process_query_sysu, process_test_regdb
-from model.eval import test
-from model.model_main import embed_net
+from src.dataset import SYSUDatasetGenerator, RegDBDatasetGenerator, TestData
+from src.dataset import process_gallery_sysu, process_query_sysu, process_test_regdb
+from src.models.evalfunc import test
+from src.models.ddag import embed_net
 
 from src.utils import genidx
 from PIL import Image

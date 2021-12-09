@@ -33,7 +33,7 @@ def test(args, gallery, query, ngall, nquery,
     gall_label = np.zeros((ngall,))
     query_label = np.zeros((nquery,))
     for (img, label) in gallery:
-        feat, feat_att = backbone(img, img, None, gall_modal)
+        feat, feat_att = backbone(img, img, 0, gall_modal)
         size = int(feat.shape[0])
         gall_feat[ptr:ptr + size, :] = feat.asnumpy()
         gall_label[ptr:ptr + size] = label.asnumpy()
@@ -49,7 +49,7 @@ def test(args, gallery, query, ngall, nquery,
     query_feat = np.zeros((nquery, 2048))
     query_feat_att = np.zeros((nquery, 2048))
     for (img, label) in query:
-        feat, feat_att = backbone(img, img, None, 3-gall_modal)
+        feat, feat_att = backbone(img, img, 0, 3-gall_modal)
         size = int(feat.shape[0])
         query_feat[ptr:ptr + size, :] = feat.asnumpy()
         query_label[ptr:ptr + size] = label.asnumpy()
