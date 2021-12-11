@@ -22,7 +22,7 @@ import mindspore.dataset.vision.py_transforms as py_trans
 
 from mindspore import context, load_checkpoint, load_param_into_net, save_checkpoint, DatasetHelper, Tensor
 from mindspore.context import ParallelMode
-from mindspore.communication.management import init, get_group_size
+from mindspore.communication import init, get_group_size, get_rank
 from mindspore.dataset.transforms.py_transforms import Compose
 from mindspore.train.callback import LossMonitor
 # from mindspore.train.dataset_helper import connect_network_with_dataset
@@ -33,12 +33,12 @@ from mindspore.nn import SGD, Adam
 
 from src.dataset import SYSUDatasetGenerator, RegDBDatasetGenerator, TestData,\
     process_query_sysu, process_gallery_sysu, process_test_regdb
-from src.models.evalfunc import test
+from src.evalfunc import test
 from src.models.ddag import embed_net
 from src.models.trainingcell import CriterionWithNet, OptimizerWithNetAndCriterion
 from src.loss import OriTripletLoss, CenterTripletLoss
 from src.utils import IdentitySampler, genidx, AverageMeter, get_param_list,\
-    LRScheduler
+    LRScheduler, DistributedIdentitySampler
 
 from PIL import Image
 # from IPython import embed
@@ -117,7 +117,7 @@ def get_parser():
 
     # training configs
     parser.add_argument('--device-target', default="CPU",
-                        choices=["CPU", "GPU", "Ascend"])
+                        choices=["CPU", "GPU", "Ascend", "Cloud"])
     parser.add_argument('--gpu', default='0', type=str,
                         help='set CUDA_VISIBLE_DEVICES')
 
@@ -126,15 +126,15 @@ def get_parser():
     # the number set in the environment variable 'CUDA_VISIBLE_DEVICES'.
     #  For example, if export CUDA_VISIBLE_DEVICES=4,5,6, the 'device_id' can be 0,1,2 at the moment,
     # 'device_id' starts from 0, and 'device_id'=0 means using GPU of number 4.
-    parser.add_argument('--device-id', default=0, type=str, help='')
+    parser.add_argument('--device-id', default=0, type=int, help='')
 
-    parser.add_argument('--device-num', default=1, type=int,
-                        help='the total number of available gpus')
+    # parser.add_argument('--device-num', default=1, type=int,
+    #                     help='the total number of available gpus')
     parser.add_argument('--resume', '-r', default='', type=str,
                         help='resume from checkpoint, no resume:""')
     parser.add_argument('--pretrain', type=str, default="",
                         help='Pretrain resnet-50 checkpoint path, no pretrain: ""')
-    parser.add_argument('--run_distribute', action='store_true',
+    parser.add_argument('--run-distribute', action='store_true',
                         help="if set true, this code will be run on distrubuted architecture with mindspore")
     parser.add_argument('--parameter-server', default=False)
     parser.add_argument('--save-period', default=5, type=int,
@@ -271,8 +271,9 @@ if __name__ == "__main__":
         local_data_path = args.data_path
         args.run_distribute = False
     else:
-        if device == "GPU":
+        if device in ["GPU", "Ascend"]:
             local_data_path = args.data_path
+            print(type(args.device_id))
             context.set_context(device_id=args.device_id)
 
         if args.parameter_server:
@@ -282,11 +283,16 @@ if __name__ == "__main__":
         if args.run_distribute:
             # Ascend target
             if device == "Ascend":
-                if args.device_num > 1:
-                    # not usefull now, because we only have one Ascend Device
-                    pass
-            # end of if args.device_num > 1:
                 init()
+                # assert args.device_num > 1
+                context.set_auto_parallel_context(
+                    device_num=get_group_size(), parallel_mode=ParallelMode.DATA_PARALLEL,
+                    gradients_mean=True
+                )
+                # mixed precision setting
+                context.set_auto_parallel_context(
+                    all_reduce_fusion_config=[85, 160])
+
 
             # GPU target
             else:
@@ -302,7 +308,7 @@ if __name__ == "__main__":
     # end of if args.run_distribute:
 
         # Adapt to Huawei Cloud: download data from obs to local location
-        if device == "Ascend":
+        if device == "Cloud":
             # Adapt to Cloud: used for downloading data from OBS to docker on the cloud
             import moxing as mox
 
@@ -319,7 +325,7 @@ if __name__ == "__main__":
     ########################################################################
     loader_batch = args.batch_size * args.num_pos
 
-    if device in ['GPU', 'CPU']:
+    if device in ['GPU', 'CPU', 'Ascend']:
         checkpoint_path = os.path.join("logs", args.tag, "training")
         os.makedirs(checkpoint_path, exist_ok=True)
 
@@ -411,9 +417,10 @@ if __name__ == "__main__":
 
     ifDebug_dic = {"yes": True, "no": False}
     if dataset_type == "SYSU":
-        # train_set
+        # train_set 
         trainset_generator = SYSUDatasetGenerator(
             data_dir=data_path, ifDebug=ifDebug_dic.get(args.debug))
+
         color_pos, thermal_pos = genidx(
             trainset_generator.train_color_label, trainset_generator.train_thermal_label)
 
@@ -535,16 +542,32 @@ if __name__ == "__main__":
 
         print('==> Preparing Data Loader...')
         # identity sampler:
-        sampler = IdentitySampler(trainset_generator.train_color_label,
-                                  trainset_generator.train_thermal_label,
+        if args.run_distribute:
+            num_shards = get_group_size()
+            shard_id = get_rank()
+            sampler = DistributedIdentitySampler(trainset_generator.train_color_label,\
+                                  trainset_generator.train_thermal_label,\
+                                  color_pos, thermal_pos, args.num_pos, args.batch_size,\
+                                  num_shards, shard_id)
+        else:
+            sampler = IdentitySampler(trainset_generator.train_color_label,\
+                                  trainset_generator.train_thermal_label,\
                                   color_pos, thermal_pos, args.num_pos, args.batch_size)
 
         trainset_generator.cIndex = sampler.index1  # color index
         trainset_generator.tIndex = sampler.index2  # thermal index
 
         # add sampler
-        trainset = ds.GeneratorDataset(trainset_generator, ["color", "thermal", "color_label", "thermal_label"],
-                                       sampler=sampler, num_parallel_workers=1)
+        if args.run_distribute:
+            rank_id = get_rank()
+            rank_size = get_group_size()
+            trainset = ds.GeneratorDataset(trainset_generator,\
+                ["color", "thermal", "color_label", "thermal_label"],\
+                sampler=sampler, num_parallel_workers=1, num_shards=rank_size, shard_id=rank_id)
+        else:
+            trainset = ds.GeneratorDataset(trainset_generator,\
+                ["color", "thermal", "color_label", "thermal_label"],\
+                sampler=sampler, num_parallel_workers=1)
 
         trainset = trainset.map(
             operations=transform_train_rgb, input_columns=["color"])

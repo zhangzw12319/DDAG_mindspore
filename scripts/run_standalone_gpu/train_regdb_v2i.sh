@@ -1,7 +1,7 @@
 export PATH=/usr/local/cuda-10.1/bin/:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda-10.1/lib/:$LD_LIBRARY_PATH
 
-myfile="test_regdb_v2i.sh"
+myfile="train_regdb_v2i.sh"
 
 if [ ! -f "$myfile" ]; then
     echo "Please first enter DDAG_mindspore/scripts/run_standalone_train and run. Exit..."
@@ -10,13 +10,17 @@ fi
 
 cd ../..
 
-python eval.py \
+python train.py \
 --dataset RegDB \
---gpu 2 \
+--optim adam \
+--lr 0.0035 \
+--gpu 1 \
 --device-target GPU \
---resume "XXX.ckpt" \
+--pretrain "resnet50.ckpt" \
 --tag "regdb_v2i" \
---data-path "" \
+--data-path "/home/shz/pytorch/data/regdb" \
+--loss-func "id+tri" \
 --branch main \
 --regdb-mode "v2i" \
---part 0
+--part 0 \
+--graph

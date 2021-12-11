@@ -1,7 +1,7 @@
 export PATH=/usr/local/cuda-10.1/bin/:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda-10.1/lib/:$LD_LIBRARY_PATH
 
-myfile="test_regdb_v2i.sh"
+myfile="train_sysu_indoor_part_graph.sh"
 
 if [ ! -f "$myfile" ]; then
     echo "Please first enter DDAG_mindspore/scripts/run_standalone_train and run. Exit..."
@@ -10,13 +10,17 @@ fi
 
 cd ../..
 
-python eval.py \
---dataset RegDB \
---gpu 2 \
+python train.py \
+--dataset SYSU \
+--optim adam \
+--lr 0.0035 \
+--gpu 3 \
 --device-target GPU \
---resume "XXX.ckpt" \
---tag "regdb_v2i" \
---data-path "" \
+--pretrain "resnet50.ckpt" \
+--tag "sysu_indoor_part_graph" \
+--data-path "/home/shz/pytorch/data/sysu" \
+--loss-func "id+tri" \
 --branch main \
---regdb-mode "v2i" \
---part 0
+--sysu-mode "indoor" \
+--part 3 \
+--graph
