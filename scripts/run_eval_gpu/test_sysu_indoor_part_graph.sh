@@ -1,7 +1,7 @@
 export PATH=/usr/local/cuda-10.1/bin/:$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda-10.1/lib/:$LD_LIBRARY_PATH
 
-myfile="test_sysu_all_part_graph.sh"
+myfile="test_sysu_indoor_part_graph.sh"
 
 if [ ! -f "$myfile" ]; then
     echo "Please first enter DDAG_mindspore/scripts/run_standalone_train and run. Exit..."
@@ -12,11 +12,11 @@ cd ../..
 
 python eval.py \
 --dataset SYSU \
---device-id 7 \
+--gpu 0 \
 --device-target GPU \
 --resume "XXX.ckpt" \
---tag "sysu_all_part_graph" \
---data-path "" \
+--tag "sysu_indoor_part_graph" \
+--data-path "Define your own path/sysu" \
 --branch main \
---sysu-mode "all" \
+--sysu-mode "indoor" \
 --part 3

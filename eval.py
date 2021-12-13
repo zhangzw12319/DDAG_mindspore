@@ -25,7 +25,7 @@ from mindspore.dataset.transforms.py_transforms import Compose
 from src.dataset import SYSUDatasetGenerator, RegDBDatasetGenerator, TestData
 from src.dataset import process_gallery_sysu, process_query_sysu, process_test_regdb
 from src.evalfunc import test
-from src.models.ddag import embed_net
+from src.models.ddag import DDAG
 
 from src.utils import genidx
 from PIL import Image
@@ -68,8 +68,6 @@ def get_parser():
     # model
     parser.add_argument('--low-dim', default=512, type=int,
                         metavar='D', help='feature dimension')
-    parser.add_argument('--arch', default='resnet50', type=str,
-                        help='network baseline:resnet50')
     parser.add_argument('--part', default=0, type=int,
                         metavar='tb', help='part number, either add weighted part attention  module')
 
@@ -92,9 +90,6 @@ def get_parser():
                         help='resume from checkpoint, no resume:""')
     parser.add_argument('--run_distribute', action='store_true',
                         help="if set true, this code will be run on distrubuted architecture with mindspore")
-    parser.add_argument('--parameter-server', default=False)
-    parser.add_argument('--save-period', default=5, type=int,
-                        help=" save checkpoint file every args.save_period epochs")
 
     # logging configs
     parser.add_argument("--branch-name", default="master",
@@ -164,9 +159,6 @@ if __name__ == "__main__":
         if device in  ["GPU", "Ascend"]:
             local_data_path = args.data_path
             context.set_context(device_id=args.device_id)
-
-        if args.parameter_server:
-            context.set_ps_context(enable_ps=True)
 
         # distributed running context setting
         if args.run_distribute:
@@ -310,8 +302,8 @@ if __name__ == "__main__":
     nquery = len(query_label)
     ngall = len(gall_label)
 
-    net = embed_net(args.low_dim, class_num=n_class,
-                    part=args.part, nheads=0, arch=args.arch)
+    net = DDAG(args.low_dim, class_num=n_class,
+                    part=args.part, nheads=0)
 
     if len(args.resume) > 0:
         print("Resume checkpoint:{}". format(args.resume))

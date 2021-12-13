@@ -12,11 +12,11 @@ cd ../..
 
 python eval.py \
 --dataset RegDB \
---gpu 2 \
---device-target GPU \
+--device-id 0 \
+--device-target Ascend \
 --resume "XXX.ckpt" \
 --tag "regdb_v2i" \
---data-path "" \
+--data-path "Define your own path/regdb" \
 --branch main \
 --regdb-mode "v2i" \
 --part 0

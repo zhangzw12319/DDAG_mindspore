@@ -14,7 +14,7 @@ python train.py \
 --dataset SYSU \
 --optim adam \
 --lr 0.0035 \
---gpu 3 \
+--gpu 0 \
 --device-target GPU \
 --pretrain "resnet50.ckpt" \
 --tag "sysu_indoor_part_graph" \
@@ -23,4 +23,5 @@ python train.py \
 --branch main \
 --sysu-mode "indoor" \
 --part 3 \
---graph
+--graph True \
+--epoch 40

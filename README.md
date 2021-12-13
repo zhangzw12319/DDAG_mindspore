@@ -57,7 +57,7 @@ dataset
 
 ```
 
-
+Then you can set `--data-path Your own path/dataset/sysu` or `--data-path Your own path/dataset/regdb` according to above dataset structure. It's OK if you want to customize your data path.  But please note that the important thing is to set path to the folder which directly contains `cam X` etc. directories and ensures `.npy` files also inside(for SYSU-MM01), or to the folder which directly contains `idx` etc. directories(for RegDB).
 
 ## Requirements
 
@@ -66,19 +66,26 @@ dataset
 - Cuda==10.1
 - psutil*==5.8.0
 - tqdm*==4.56.0
-- PIL*
 
 *Note: these third party package are not stricted a specific version. For more details, please see `requriements.txt` .
 
 
 
 ## Quick Start
+For GPU:
 
 ```shell
-cd DDAG_mindspore/scripts/run_standalone_train # please enter this path before sh XXX.sh, otherwise path errors :)
+cd DDAG_mindspore/scripts/run_standalone_gpu # please enter this path before sh XXX.sh, otherwise path errors :)
 sh train_sysu_all_part_graph.sh
 ```
+or
 
+For Ascend:
+
+```shell
+cd DDAG_mindspore/scripts/run_standalone_ascend # please enter this path before sh XXX.sh, otherwise path errors :)
+sh train_sysu_all_part_graph.sh
+```
 
 
 ## Script Description
@@ -88,23 +95,37 @@ sh train_sysu_all_part_graph.sh
 ```
 MVD
 ├── scripts                                       # .sh script save place
-│   └── run_standalone_train										        # Single machine single graphic card training
+│   └── run_standalone_gpu										    # Single machine single graphic card training on GPU
 │		│		│																		      # SYSU-MM01 Dataset(Below ↓)
-│		│		├── train_sysu_all_part_graph.sh	        # search all mode, part+graph attention 
-│		│		├── train_sysu_all_baseline.sh            # search all mode, baseline 
-│		│		├── train_sysu_indoor_part_graph.sh       # search indoor mode, part+graph attention
-│		│		├── train_sysu_indoor_baseline.sh		      # search indoor mode, baseline
+│		│		├── train_sysu_all_part_graph.sh	        		# search all mode, baseline+part+graph attention 
+│		│		├── train_sysu_all_baseline.sh            		# search all mode, baseline 
+│		│		├── train_sysu_indoor_part_graph.sh       		# search indoor mode, baseline+part+graph attention
+│		│		├── train_sysu_indoor_baseline.sh		      		# search indoor mode, baseline
 │   │   │																		      # RegDB Dataset(Below ↓)
-│   │   ├── train_regdb_i2v.sh                    # infrared(thermal) to visible
-│   │   ├── train_regdb_v2i                       # visible to infrared(thermal)
-│   └── run_eval																	# Testing scripts
+│   │   ├── train_regdb_i2v.sh                    		# infrared(thermal) to visible
+│   │   └── train_regdb_v2i                       		# visible to infrared(thermal)
+│   ├── run_standalone_ascend										  # Single machine single graphic card training on Ascend
+│		│		│																		      
+│		│		├── train_sysu_all_part_graph.sh	        
+│		│		├── train_sysu_all_baseline.sh             
+│		│		├── train_sysu_indoor_part_graph.sh       
+│		│		├── train_sysu_indoor_baseline.sh		      
+│   │   │																		      
+│   │   ├── train_regdb_i2v.sh                    
+│   │   └── train_regdb_v2i                       
+│		├── run_eval_gpu															# Testing scripts on GPU
+│		│		├── test_sysu_all_part_graph.sh	          
+│		│		├── test_sysu_all_baseline.sh             
+│		│		├── test_sysu_indoor_part_graph.sh       
+│		│		└── test_sysu_indoor_baseline.sh
+│   └── run_eval_ascend														# Testing scripts on Ascend
 │				├── test_sysu_all_part_graph.sh	          
 │				├── test_sysu_all_baseline.sh             
 │				├── test_sysu_indoor_part_graph.sh       
 │				└── test_sysu_indoor_baseline.sh
 │                                
 ├── src																						# source scripts
-│			├── models																	# network define
+│			├── models																	# define network
 │     │   ├── ddag.py															# DDAG main model
 │     │   ├── resnet.py														# resnet backbone
 │     │   ├── trainingcell.py											# network with loss and optimizer cell
@@ -140,11 +161,11 @@ python train.py \
 --dataset SYSU \
 --optim adam \
 --lr 0.0035 \
---device-id 1 \
---device-target Ascend \
---pretrain "/opt_data/ecnu/resnet50.ckpt" \
+--device-id 1 \ # for GPU, --gpu 1
+--device-target Ascend \ # for GPU, --device-target GPU
+--pretrain "resnet50.ckpt" \
 --tag "sysu_all_part_graph" \
---data-path "/.../dataset/sysu" \
+--data-path "Your own path/sysu" \
 --loss-func "id+tri" \
 --branch main \
 --sysu-mode "all" \
@@ -159,7 +180,8 @@ The following table describes the most commonly used arguments. You can change f
 |    `--MSmode`     | Mindspore running mode, either 'GRAPH_MODE' or 'PYNATIVE_MODE'. |
 | `--device-target` |              choose "GPU", "Ascend" or "Cloud"               |
 |    `--dataset`    |              which dataset, "SYSU" or "RegDB".               |
-|      `--gpu`      | which gpu to run(default: 0), only effective when `--device-target=GPU` |
+|      `--gpu`      | which gpu to run(default: 0), only effective when `--device-target GPU` |
+|   `--device-id`   | which Ascend AI core to run(default:0), only effective when `--device-target Ascend ` |
 |   `--data-path`   | manually define the data path(for `SYSU`, path folder must contain `.npy` files, see [`pre_process_sysu.py`](#anchor1) ). |
 |   `--pretrain`    | specify resnet-50 pretrain file path(default "" for no ckpt file)* |
 |    `--resume`     | specify checkpoint file path for whole model(default "" for no ckpt file, `--resume` loads weights after `--pretrain`, and thus will overwrite `--pretrain` weights)* |
@@ -170,7 +192,7 @@ The following table describes the most commonly used arguments. You can change f
 
 ***Note: Please note that mindspore compulsorily requires checkpoint files have `.cpkt` as file suffix, otherwise may trigger errors during loading.**
 
-We recommend that these following hyper-parameters in `.sh` files should be kept by default. If you want ablation study or fine-tuning, feel free to change.
+We recommend that these following hyper-parameters in `.sh` files should be kept by default. If you want ablation study or fine-tuning, feel free to change :)
 
 | Config Arguments |                         Explanation                          |
 | :--------------: | :----------------------------------------------------------: |
@@ -182,7 +204,9 @@ We recommend that these following hyper-parameters in `.sh` files should be kept
 | `--start-decay`  |         the start epoch of lr decay, by default 15.          |
 |  `--end-decay`   |        the ending epoch of lr decay , by default 27.         |
 |  `--loss-func`   | for ablation study, by default "id+tri" which is cross-entropy loss plus triplet loss. You can choose from `["id", "id+tri"]`. |
-|    `--graph`     |       if set `--graph` then use graph attention module       |
+|    `--graph`     | if set `--graph True` then use graph attention module; `--graph False` for not using* |
+
+***Note: graph attention only used in training, not in inference/testing.**
 
 For more detailed and comprehensive arguments description, please refer to `train.py`.	
 
@@ -190,8 +214,17 @@ For more detailed and comprehensive arguments description, please refer to `trai
 
 ### Training Process
 
+For GPU:
+
 ```shell
-cd DDAG_mindspore/scripts/run_standalone_train # please enter this path before sh XXX.sh, otherwise path errors :)
+cd DDAG_mindspore/scripts/run_standalone_gpu # please enter this path before sh XXX.sh, otherwise path errors :)
+sh train_sysu_all_part_graph.sh
+```
+
+For Ascend：
+
+```shell
+cd DDAG_mindspore/scripts/run_standalone_ascend # please enter this path before sh XXX.sh, otherwise path errors :)
 sh train_sysu_all_part_graph.sh
 ```
 
@@ -203,9 +236,11 @@ You can replace `train_sysu_all_part_graph.sh` with other training scirpts.
 
 We use checkpoint from resnet50 pretrained on ImageNet, and the file link https://download.mindspore.cn/model_zoo/r1.1/resnet50_ascend_v111_imagenet2012_official_cv_bs32_acc76/.
 
+For convenience, you can rename it `resnet50.ckpt` and save it directly under `DDAG_mindspore/`, then you can leave `--pretrain resnet50.ckpt` unchanged for convenience.
+
 ### Training Result
 
-Training checkpoint will be stored in `logs/args.tag/training`, in which args.tag is specified before. The log <a id="log">architecture</a> is like following. It will be generated when you run `.sh` script and start training.
+Training checkpoint will be stored in `logs/args.tag/training`, in which args.tag is specified before. The log <a id="log"> organization</a> is like following.  It will be generated when you run `.sh` script and start training.
 
 ```
 logs
@@ -220,11 +255,9 @@ logs
         └── SYSU_batch-size_2*8*4=64_adam_lr_0.0035_loss-func_id+tri_P_3_Graph__main_performance_2021-12-10_03-04-05.txt
 ```
 
-In `training` subdirectory `.txt`files are log files and `.ckpt` files are checkpoint files.
+In `training` subdirectory,  `.txt` files are log files and `.ckpt` files are checkpoint files.
 
-You will get result from training log file like the following. 
-
-At the end of every epoch training, `train.py` will use a random testing set (different from training set) to evaluate the model performance. So you will see rank-1 and mAP performance. And this programming pattern of evaluation is analogy to `test.py`. 
+You will get result from training log file like the following:
 
 ```
 Epoch [28]
@@ -241,14 +274,25 @@ FC_att:   Rank-1: 59.44% | Rank-5: 83.13% | Rank-10: 90.99%| Rank-20: 96.14%| mA
 ******************************************************************************
 ```
 
-Note: DDAG Graph module is not used in testing/inference mode. If using part attention feature during inference, we named it FC_att, otherwise FC.
+At the end of every epoch training, `train.py` will use a random testing set (different from training set) to evaluate the model performance. So you will see rank-1 and mAP performance. And this programming pattern of evaluation is analogy to `test.py`. 
+
+Note: DDAG Graph module is not used in testing/inference mode.  If using part attention feature during inference, we named it FC_att, otherwise FC.
 
 ## Evaluation
 
 ### Evaluation Process
 
+For GPU：
+
 ```shell
-cd DDAG_mindspore/scripts/run_eval # please enter this path before sh XXX.sh, otherwise path errors :)
+cd DDAG_mindspore/scripts/run_eval_gpu # please enter this path before sh XXX.sh, otherwise path errors :)
+sh test_sysu_all_part_graph.sh
+```
+
+For Ascend:
+
+```shell
+cd DDAG_mindspore/scripts/run_eval_ascend # please enter this path before sh XXX.sh, otherwise path errors :)
 sh test_sysu_all_part_graph.sh
 ```
 
@@ -256,7 +300,7 @@ sh test_sysu_all_part_graph.sh
 
 ### Evaluation Result
 
-Before you start testing, please set `--resume` in `test_XXX.sh` .You can find your saved checkpoints in corresponding `/logs/XXX/training/` path.  You will get result from testing log file like the following. 
+Before you start testing, please set `--resume` in `test_XXX.sh` . You can find your saved checkpoints in corresponding `/logs/args.tag/training/` path.  After running `test_XXX.sh`, you will get result from testing log file like the following:
 
 ```
 Resume checkpoint:/.../DDAG_mindspore/logs/sysu_all_part_graph/training/epoch_25_rank1_57.04_mAP_55.76_SYSU_batch-size_2*8*4=64_adam_lr_0.0035_loss-func_id+tri_P_3_Graph__main.ckpt
@@ -273,38 +317,39 @@ FC_att:   Rank-1: 57.42% | Rank-5: 82.59% | Rank-10: 90.91%| Rank-20: 96.17%| mA
 
 ### Training Performance
 
-| Parameters                 | Ascend 910                                                   | GPU |
+| Parameters                 | Ascend 910                                                   | GPU(RTX Titan) |
 | -------------------------- | ------------------------------------------------------------ | ----------------------------------------------|
-| Model Version              | DDAG + Part Attention + Graph Attention            | DDAG + Part Attention + Graph Attention |
-| Resource                   | Ascend 910; CPU 2.60GHz, 192cores; Memory 755G; OS Euler2.8  |  RTX Titan-24G                  |
-| uploaded Date              | 12/10/2021 (month/day/year)                      | ==07/23/2021 (month/day/year)==               |
+| Model Version              | DDAG + baseline(modified resnet50*) + Part Attention + Graph Attention | DDAG + baseline (modified resnet50) + Part Attention + Graph Attention |
+| Resource                   | Ascend 910; CPU 2.60GHz, 192cores; Memory 755G; OS Euler2.8  |  NVIDIA RTX Titan-24G        |
+| uploaded Date              | 12/10/2021 (month/day/year)                      | 12/10/2021 (month/day/year)           |
 | MindSpore Version          | 1.3.0, 1.5.0                                             | 1.3.0, 1.5.0                                  |
-| Dataset                    | SYSU-MM01                                     | SYSU-MM01                  |
-| Training Parameters        | epoch=40, steps per epoch=695, batch_size = 64          | epoch=40, steps per epoch=64 batch_size = 64 |
+| Dataset                    | SYSU-MM01, RegDB                              | SYSU-MM01, RegDB           |
+| Training Parameters（SYSU-MM01） | Epochs=40, steps per epoch=695, batch_size = 64 | epoch=40, steps per epoch=64 batch_size = 64 |
+| Training Parameters（RegDB） | Epochs=80, steps per epoch=695, batch_size = 64 | epoch=80, steps per epoch=64 batch_size = 64 |
 | Optimizer                  | Adam                                                 | Adam                                  |
 | Loss Function              | Softmax Cross Entropy + Triplet Loss                         | Softmax Cross Entropy + Triplet Loss          |
 | outputs                    | feature vector + probability                              | feature vector + probability               |
-| Loss                       | 0.2121                                           |  **==123==**                      |
-| Speed                      | 660 ms/step（1pcs, Graph Mode）                           | 580ms/step（1pcs, Graph Mode）          |
-| Total time                 | About 5h                                              | About 5h                          |
-| Parameters (M)             | ==11.2==                                                | ==11.2==                                      |
+| Loss                       | 0.2121                                           |  0.2208              |
+| Speed                      | 660 ms/step（1pcs, Graph Mode）                           | 250ms/step（1pcs, Graph Mode）       |
+| Total time                 | About 5h                                              | About                          |
+| Parameters (M)             | 122.7                                           | 122.7                                 |
 | Checkpoint for Fine tuning | 197M (.ckpt file)                                          | 196 (.ckpt file)                          |
 | Scripts                    | [link](https://gitee.com/mindspore/models/research/cv/DDAG_mindspore) ||
 
-
+*Note: Modified resnet-50 incorporates a modal-specific first layer. For more details, please read the [original paper](https://arxiv.org/pdf/2007.09314.pdf)  or original [pytorch implementation](https://github.com/mangye16/DDAG).
 
 ### Inference Performance
 
-| Parameters        | Ascend                                        |
-| ----------------- | --------------------------------------------- |
-| Model Version     | DDAG + Part Attention + Graph Attention       |
-| Resource          | Ascend 910; OS Euler2.8                       |
-| Uploaded Date     | 12/10/2021 (month/day/year)                   |
-| MindSpore Version | 1.5.0, 1.3.0                                  |
-| Dataset           | SYSU-MM01                                     |
-| batch_size        | 64                                            |
-| outputs           | feature + probability                         |
-| Accuracy          | Rank-1: 57.42% (FC_att), mAP: 55.33% (FC_att) |
+| Parameters        | Ascend                                  | GPU(RTX Titan)                          |
+| ----------------- | --------------------------------------- | --------------------------------------- |
+| Model Version     | DDAG + Part Attention + Graph Attention | DDAG + Part Attention + Graph Attention |
+| Resource          | Ascend 910; OS Euler2.8                 | NVIDIA RTX Titan-24G                    |
+| Uploaded Date     | 12/10/2021 (month/day/year)             | 12/10/2021 (month/day/year)             |
+| MindSpore Version | 1.5.0, 1.3.0                            | 1.5.0, 1.3.0                            |
+| Dataset           | SYSU-MM01, RegDB                        | SYSU-MM01, RegDB                        |
+| batch_size        | 64                                      |                                         |
+| outputs           | feature                                 |                                         |
+| Accuracy          | See following 4 tables ↓                |                                         |
 
 ### SYSU-MM01 (all-search mode)
 
@@ -318,21 +363,21 @@ FC_att:   Rank-1: 57.42% | Rank-5: 82.59% | Rank-10: 90.91%| Rank-20: 96.17%| mA
 | Metric | Value(Pytorch) | Value(Mindspore, GPU) |
 | :----: | :------------: | :-------------------: |
 | Rank-1 |     61.02%     |        65.46%         |
-| Rank-1 |     67.98%     |        69.28%         |
+|  mAP   |     67.98%     |        69.28%         |
 
 ### RegDB(Visible-Thermal)
 
-| Metric | Value(Pytorch) | Value(Mindspore, GPU) |
-| :----: | :------------: | :-------------------: |
-| Rank-1 |     69.34%     |        85.49%         |
-|  mAP   |     63.46%     |        80.01%         |
+| Metric | Value(Pytorch) | Value(Mindspore, GPU, --trial 1) |
+| :----: | :------------: | :------------------------------: |
+| Rank-1 |     69.34%     |              85.49%              |
+|  mAP   |     63.46%     |              80.01%              |
 
 ### RegDB(Thermal-Visible)
 
-| Metric | Value(Pytorch) | Value(Mindspore, GPU) |
-| :----: | :------------: | :-------------------: |
-| Rank-1 |     68.06%     |        84.17%         |
-|  mAP   |     61.80%     |        78.43%         |
+| Metric | Value(Pytorch) | Value(Mindspore, GPU, --trial 1) |
+| :----: | :------------: | :------------------------------: |
+| Rank-1 |     68.06%     |              84.17%              |
+|  mAP   |     61.80%     |              78.43%              |
 
 ***Note**: The aforementioned pytorch results can be seen in original [pytorch repo](https://github.com/mangye16/DDAG).
 
@@ -340,9 +385,9 @@ FC_att:   Rank-1: 57.42% | Rank-5: 82.59% | Rank-10: 90.91%| Rank-20: 96.17%| mA
 
 
 
-- In `utils.py`, `IdentitySampler` used to sample different identities and images in both visible and infrared(thermal) modal, and we set random seed in IndentitySampler. This randomness will affect both testing part in `train.py` and inference in `eval.py`. Therefore small different rank-1 and mAP fluctuation(about 1%) between `train.py` testing and `eval.py  `inference even on the same checkpoint files may be observed.
+- In `utils.py`, `IdentitySampler` used to sample different identities and images in both visible and infrared(thermal) modal, and we set random seed in `IndentitySampler`. This randomness will affect both inference part in `train.py` and in `eval.py`. Therefore small different rank-1 and mAP fluctuations(about 1%) between inference in `train.py` and `eval.py  ` may be seen even on the same training results.
 
-- When testing on RegDB dataset, there is a `--trial` argment specifying which id to be selected; different  `--trial`  choosing may cause slight rank-1 mAP fluctuation.
+- When testing on RegDB dataset, there is a `--trial` argument specifying which id to be selected; different  `--trial`  choosing may cause slight rank-1 mAP fluctuation.
 
 	
 

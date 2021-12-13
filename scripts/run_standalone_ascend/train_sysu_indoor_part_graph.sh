@@ -20,4 +20,5 @@ python train.py \
 --branch main \
 --sysu-mode "indoor" \
 --part 3 \
---graph
+--graph True \
+--epoch 40

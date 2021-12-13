@@ -14,7 +14,7 @@ python train.py \
 --dataset RegDB \
 --optim adam \
 --lr 0.0035 \
---gpu 1 \
+--gpu 0 \
 --device-target GPU \
 --pretrain "resnet50.ckpt" \
 --tag "regdb_v2i" \
@@ -23,4 +23,4 @@ python train.py \
 --branch main \
 --regdb-mode "v2i" \
 --part 0 \
---graph
+--graph True

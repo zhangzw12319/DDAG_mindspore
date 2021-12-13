@@ -15,7 +15,7 @@ python train.py \
 --dataset SYSU \
 --optim adam \
 --lr 0.0035 \
---device-id 1 \
+--gpu 0 \
 --device-target GPU \
 --pretrain "resnet50.ckpt" \
 --tag "sysu_all_part_graph" \
@@ -24,5 +24,5 @@ python train.py \
 --branch main \
 --sysu-mode "all" \
 --part 3 \
---graph true\
+--graph True \
 --epoch 40

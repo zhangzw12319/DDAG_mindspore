@@ -20,4 +20,4 @@ python train.py \
 --branch main \
 --regdb-mode "v2i" \
 --part 0 \
---graph
+--graph True

@@ -88,7 +88,7 @@ def get_parser():
                         metavar='D', help='feature dimension')
     parser.add_argument('--part', default=0, type=int,
                         metavar='tb', help='part number, either add weighted part attention  module')
-    parser.add_argument('--graph', action='store_true',
+    parser.add_argument('--graph', default=False, type=bool,
                         help='either add graph attention or not')
 
     # loss setting

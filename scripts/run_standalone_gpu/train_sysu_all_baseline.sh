@@ -14,7 +14,7 @@ python train.py \
 --dataset SYSU \
 --optim adam \
 --lr 0.0035 \
---gpu 2 \
+--gpu 0 \
 --device-target GPU \
 --pretrain "resnet50.ckpt" \
 --tag "sysu_all_baseline" \
