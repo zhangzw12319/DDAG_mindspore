@@ -1,4 +1,5 @@
-smyfile="train_regdb_i2v.sh"
+#!/usr/bin/env bash
+myfile="train_regdb_i2v.sh"
 
 if [ ! -f "$myfile" ]; then
     echo "Please first enter DDAG_mindspore/scripts/run_standalone_train and run. Exit..."

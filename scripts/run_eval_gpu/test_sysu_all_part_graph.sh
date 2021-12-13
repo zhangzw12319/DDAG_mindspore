@@ -1,6 +1,4 @@
-export PATH=/usr/local/cuda-10.1/bin/:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-10.1/lib/:$LD_LIBRARY_PATH
-
+#!/usr/bin/env bash
 myfile="test_sysu_all_part_graph.sh"
 
 if [ ! -f "$myfile" ]; then

@@ -52,7 +52,7 @@ def get_parser():
                         help='dataset name: RegDB or SYSU')
     parser.add_argument('--data-path', type=str, default='')
     # Only used on Huawei Cloud OBS service,
-    # when this is set, --data_path is overrided by --data-url
+    # when this is set, --data_path is overridden by --data-url
     parser.add_argument("--data-url", type=str, default=None)
     parser.add_argument('--test-batch', default=64, type=int,
                         metavar='tb', help='testing batch size')
@@ -89,7 +89,7 @@ def get_parser():
     parser.add_argument('--resume', '-r', default='', type=str,
                         help='resume from checkpoint, no resume:""')
     parser.add_argument('--run_distribute', action='store_true',
-                        help="if set true, this code will be run on distrubuted architecture with mindspore")
+                        help="if set true, this code will be run on distributed architecture with mindspore")
 
     # logging configs
     parser.add_argument("--branch-name", default="master",
@@ -165,7 +165,7 @@ if __name__ == "__main__":
             # Ascend target
             if device == "Ascend":
                 if args.device_num > 1:
-                    # not usefull now, because we only have one Ascend Device
+                    # not useful now, because we only have one Ascend Device
                     pass
             # end of if args.device_num > 1:
                 init()
@@ -302,10 +302,10 @@ if __name__ == "__main__":
     nquery = len(query_label)
     ngall = len(gall_label)
 
-    net = DDAG(args.low_dim, class_num=n_class,
-                    part=args.part, nheads=0)
+    net = DDAG(args.low_dim, class_num=n_class,\
+               part=args.part, nheads=0)
 
-    if len(args.resume) > 0:
+    if args.resume != "":
         print("Resume checkpoint:{}". format(args.resume))
         print("Resume checkpoint:{}". format(args.resume), file=log_file)
         param_dict = load_checkpoint(args.resume)

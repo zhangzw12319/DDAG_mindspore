@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 myfile="train_sysu_indoor_baseline.sh"
 
 if [ ! -f "$myfile" ]; then

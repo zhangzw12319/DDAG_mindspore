@@ -135,7 +135,7 @@ class CenterTripletLoss(nn.Cell):
 
         # dim = input_.shape[1]
         #################################
-        # The following 3 lines can work normaly in PYNATIVE_MODE,
+        # The following 3 lines can work normally in PYNATIVE_MODE,
         # but have problems in GRAPH_MODE, due to different behavier
         # of Unique() operation under two modes. We have reported this
         # to official and wait for future fixes.

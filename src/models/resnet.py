@@ -365,10 +365,10 @@ def resnet50_share(pretrain=""):
         >>> net = resnet50()
     """
     resnet = ResNetShare(ResidualBlock,
-                          [3, 4, 6, 3],
-                          [64, 256, 512, 1024],
-                          [256, 512, 1024, 2048],
-                          [1, 2, 2, 2])
+                         [3, 4, 6, 3],
+                         [64, 256, 512, 1024],
+                         [256, 512, 1024, 2048],
+                         [1, 2, 2, 2])
 
     if pretrain:
         param_dict = load_checkpoint(pretrain)

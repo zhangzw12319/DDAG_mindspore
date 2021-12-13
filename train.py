@@ -66,7 +66,7 @@ def get_parser():
                         help='dataset name: RegDB or SYSU')
     parser.add_argument('--data-path', type=str, default='')
     # Only used on Huawei Cloud OBS service,
-    # when this is set, --data_path is overrided by --data-url
+    # when this is set, --data_path is overridden by --data-url
     parser.add_argument("--data-url", type=str, default=None)
     parser.add_argument('--batch-size', default=8, type=int,
                         metavar='B', help='the number of person IDs in a batch')
@@ -96,7 +96,7 @@ def get_parser():
                         metavar='epoch', help='epoch num')
     parser.add_argument('--start-epoch', default=1, type=int)
     parser.add_argument('--loss-func', default='id+tri', type=str, choices=['id', 'tri', 'id+tri'],
-                        metavar='m', help='specify loss fuction type')
+                        metavar='m', help='specify loss function type')
     parser.add_argument('--triloss', default='Ori',
                         type=str, choices=['Ori', 'Center'])
     parser.add_argument('--drop', default=0.2, type=float,
@@ -129,7 +129,7 @@ def get_parser():
     parser.add_argument('--pretrain', type=str, default="",
                         help='Pretrain resnet-50 checkpoint path, no pretrain: ""')
     parser.add_argument('--run-distribute', action='store_true',
-                        help="if set true, this code will be run on distrubuted architecture with mindspore")
+                        help="if set true, this code will be run on distributed architecture with mindspore")
     parser.add_argument('--parameter-server', default=False)
     parser.add_argument('--save-period', default=5, type=int,
                         help=" save checkpoint file every args.save_period epochs")
@@ -217,7 +217,7 @@ def optim(epoch_info, backbone_lr_s, head_lr_s):
             {'params': net.wpa.trainable_params(), 'lr': head_lr},
             {'params': net.graph_att.trainable_params(), 'lr': head_lr}
         ],
-                               learning_rate=args.lr, weight_decay=5e-4, nesterov=True, momentum=0.9)
+                    learning_rate=args.lr, weight_decay=5e-4, nesterov=True, momentum=0.9)
 
     elif args.optim == 'adam':
         ignored_params = list(map(id, net.bottleneck.trainable_params())) \
@@ -235,7 +235,7 @@ def optim(epoch_info, backbone_lr_s, head_lr_s):
             {'params': net.wpa.trainable_params(), 'lr': head_lr},
             {'params': net.graph_att.trainable_params(), 'lr': head_lr}
         ],
-                                learning_rate=args.lr, weight_decay=5e-4)
+                     learning_rate=args.lr, weight_decay=5e-4)
 
     return opt_p
 
@@ -460,7 +460,7 @@ if __name__ == "__main__":
     ########################################################################
 
     # pretrain
-    if len(args.pretrain) > 0:
+    if args.pretrain != 0:
         print("Pretrain model: {}".format(args.pretrain))
         print("Pretrain model: {}".format(args.pretrain), file=log_file)
 
@@ -471,13 +471,13 @@ if __name__ == "__main__":
     ngall = len(gall_label)
 
     if args.graph:
-        net = DDAG(args.low_dim, class_num=n_class, drop=args.drop,
-                        part=args.part, nheads=4, pretrain=args.pretrain)
+        net = DDAG(args.low_dim, class_num=n_class, drop=args.drop,\
+                   part=args.part, nheads=4, pretrain=args.pretrain)
     else:
-        net = DDAG(args.low_dim, class_num=n_class, drop=args.drop,
-                        part=args.part, nheads=0, pretrain=args.pretrain)
+        net = DDAG(args.low_dim, class_num=n_class, drop=args.drop,\
+                   part=args.part, nheads=0, pretrain=args.pretrain)
 
-    if len(args.resume) > 0:
+    if args.resume != "":
         print("Resume checkpoint:{}". format(args.resume))
         print("Resume checkpoint:{}". format(args.resume), file=log_file)
         param_dict = load_checkpoint(args.resume)

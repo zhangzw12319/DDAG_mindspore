@@ -63,9 +63,9 @@ def test(args, gallery, query, ngall, nquery,
     distmat_att = np.matmul(query_feat_att, np.transpose(gall_feat_att))
 
     if args.dataset == "SYSU":
-        cmc, map_ = eval_sysu(-distmat, query_label,
-                             gall_label, query_cam, gallery_cam)
-        cmc_att, map_att = eval_sysu(-distmat_att,
+        cmc, map_ = eval_sysu(-distmat, query_label,\
+                              gall_label, query_cam, gallery_cam)
+        cmc_att, map_att = eval_sysu(-distmat_att,\
                                      query_label, gall_label, query_cam, gallery_cam)
 
     elif args.dataset == "RegDB":
@@ -124,7 +124,7 @@ def eval_sysu(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=20):
         cmc = orig_cmc.cumsum()
 
         # compute mINP
-        # refernece: Deep Learning for Person Re-identification: A Survey and Outlook
+        # reference: Deep Learning for Person Re-identification: A Survey and Outlook
         pos_idx = np.where(orig_cmc == 1)
         pos_max_idx = np.max(pos_idx)
         inp = cmc[pos_max_idx] / (pos_max_idx + 1.0)
@@ -197,7 +197,7 @@ def eval_regdb(distmat, q_pids, g_pids, max_rank=20):
         cmc = raw_cmc.cumsum()
 
         # compute mINP
-        # refernece: Deep Learning for Person Re-identification: A Survey and Outlook
+        # reference: Deep Learning for Person Re-identification: A Survey and Outlook
         pos_idx = np.where(raw_cmc == 1)
         pos_max_idx = np.max(pos_idx)
         inp = cmc[pos_max_idx] / (pos_max_idx + 1.0)

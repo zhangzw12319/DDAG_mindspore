@@ -242,10 +242,11 @@ class DDAG(nn.Cell):
             if self.part > 0:
                 return feat, feat_att, out, out_att
             return feat, feat, out, out  # just for debug
-        else:
-            if self.part > 0:
-                return self.l2norm(feat), self.l2norm(feat_att)
-            return self.l2norm(feat), self.l2norm(feat)  # just for debug
+
+        # inference
+        if self.part > 0:
+            return self.l2norm(feat), self.l2norm(feat_att)
+        return self.l2norm(feat), self.l2norm(feat)  # just for debug
 
     def create_graph(self, target1, target2):
         """

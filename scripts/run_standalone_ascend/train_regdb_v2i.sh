@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 myfile="train_regdb_v2i.sh"
 
 if [ ! -f "$myfile" ]; then
