@@ -24,7 +24,7 @@ from mindspore.communication.management import init, get_group_size
 from mindspore.dataset.transforms.py_transforms import Compose
 from src.dataset import SYSUDatasetGenerator, RegDBDatasetGenerator, TestData
 from src.dataset import process_gallery_sysu, process_query_sysu, process_test_regdb
-from src.models.evalfunc import test
+from src.evalfunc import test
 from src.models.ddag import embed_net
 
 from src.utils import genidx
@@ -221,8 +221,8 @@ if __name__ == "__main__":
             suffix = suffix + '_trial_{}'.format(args.trial)
 
         time_msg = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-        log_file = open(osp.join(checkpoint_path,
-                                 "{}_performance_{}.txt".format(suffix, time_msg)), "w")
+        log_file = open(osp.join(checkpoint_path,\
+                    "{}_performance_{}.txt".format(suffix, time_msg)), "w", encoding='utf-8')
 
         print('Args: {}'.format(args))
         print('Args: {}'.format(args), file=log_file)
@@ -243,7 +243,6 @@ if __name__ == "__main__":
 
     start_epoch = 1
     feature_dim = args.low_dim
-    wG = 0
     start_time = time.time()
 
     print("==> Loading data")
@@ -327,14 +326,6 @@ if __name__ == "__main__":
     ########################################################################
     # Start Testing
     ########################################################################
-
-    print('==> Start Testing...')
-    best_mAP = 0.0
-    best_r1 = 0.0
-    best_epoch = 0
-    best_param_list = None
-    best_path = None
-
     net.set_train(mode=False)
     gallset = ds.GeneratorDataset(gallset_generator, ["img", "label"])
     gallset = gallset.map(operations=transform_test, input_columns=["img"])

@@ -63,16 +63,16 @@ def test(args, gallery, query, ngall, nquery,
     distmat_att = np.matmul(query_feat_att, np.transpose(gall_feat_att))
 
     if args.dataset == "SYSU":
-        cmc, mAP = eval_sysu(-distmat, query_label,
+        cmc, map_ = eval_sysu(-distmat, query_label,
                              gall_label, query_cam, gallery_cam)
-        cmc_att, mAP_att = eval_sysu(-distmat_att,
+        cmc_att, map_att = eval_sysu(-distmat_att,
                                      query_label, gall_label, query_cam, gallery_cam)
 
     elif args.dataset == "RegDB":
-        cmc, mAP = eval_regdb(-distmat, query_label, gall_label)
-        cmc_att, mAP_att = eval_regdb(-distmat_att, query_label, gall_label)
+        cmc, map_ = eval_regdb(-distmat, query_label, gall_label)
+        cmc_att, map_att = eval_regdb(-distmat_att, query_label, gall_label)
 
-    return cmc, mAP, cmc_att, mAP_att
+    return cmc, map_, cmc_att, map_att
 
 
 def eval_sysu(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=20):
@@ -151,9 +151,9 @@ def eval_sysu(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=20):
 
     new_all_cmc = np.asarray(new_all_cmc).astype(np.float32)
     new_all_cmc = new_all_cmc.sum(0) / num_valid_q
-    mAP = np.mean(all_AP)
+    map_ = np.mean(all_AP)
     # mINP = np.mean(all_INP)
-    return new_all_cmc, mAP
+    return new_all_cmc, map_
 
 
 def eval_regdb(distmat, q_pids, g_pids, max_rank=20):
@@ -221,6 +221,6 @@ def eval_regdb(distmat, q_pids, g_pids, max_rank=20):
 
     all_cmc = np.asarray(all_cmc).astype(np.float32)
     all_cmc = all_cmc.sum(0) / num_valid_q
-    mAP = np.mean(all_AP)
+    map_ = np.mean(all_AP)
     # mINP = np.mean(all_INP)
-    return all_cmc, mAP
+    return all_cmc, map_

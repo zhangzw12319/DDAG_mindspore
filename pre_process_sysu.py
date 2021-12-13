@@ -12,12 +12,12 @@ ir_cameras = ['cam3', 'cam6']
 # load id info
 file_path_train = os.path.join(data_path, 'exp/train_id.txt')
 file_path_val = os.path.join(data_path, 'exp/val_id.txt')
-with open(file_path_train, 'r') as file:
+with open(file_path_train, 'r', encoding='utf-8') as file:
     ids = file.read().splitlines()
     ids = [int(y) for y in ids[0].split(',')]
     id_train = ["%04d" % x for x in ids]
 
-with open(file_path_val, 'r') as file:
+with open(file_path_val, 'r', encoding='utf-8') as file:
     ids = file.read().splitlines()
     ids = [int(y) for y in ids[0].split(',')]
     id_val = ["%04d" % x for x in ids]

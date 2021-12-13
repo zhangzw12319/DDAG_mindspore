@@ -15,7 +15,7 @@ python train.py \
 --device-target Ascend \
 --pretrain "resnet50.ckpt" \
 --tag "regdb_i2v" \
---data-path "" \
+--data-path "Define your own path/regdb/" \
 --loss-func "id+tri" \
 --branch main \
 --regdb-mode "i2v" \

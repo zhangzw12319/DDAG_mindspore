@@ -12,11 +12,11 @@ python train.py \
 --dataset SYSU \
 --optim adam \
 --lr 0.0035 \
---device-id 1 \
+--device-id 3 \
 --device-target Ascend \
---pretrain "/opt_data/ecnu/resnet50.ckpt" \
+--pretrain "resnet50.ckpt" \
 --tag "sysu_all_part_graph" \
---data-path "" \
+--data-path "Define your own path/sysu" \
 --loss-func "id+tri" \
 --branch main \
 --sysu-mode "all" \

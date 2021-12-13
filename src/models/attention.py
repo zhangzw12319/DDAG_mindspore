@@ -1,10 +1,11 @@
 """attention.py"""
 import numpy as np
 import mindspore as ms
-import mindspore.nn as nn
 import mindspore.common.initializer as weight_init
 import mindspore.ops as P
 import mindspore.numpy as msnp
+
+from mindspore import nn
 from mindspore.ops import L2Normalize, Transpose
 from mindspore.common.initializer import initializer, Constant, XavierUniform
 

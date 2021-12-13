@@ -1,8 +1,9 @@
 """dataload.py"""
 import os
 import os.path as osp
-import numpy as np
 import random
+import numpy as np
+
 from PIL import Image
 
 # minist_dataset = ds.MnistDataset()
@@ -12,52 +13,39 @@ class SYSUDatasetGenerator():
     class of sysudataset generator
     """
 
-    def __init__(self, data_dir, colorIndex=None, thermalIndex=None, ifDebug=False):
+    def __init__(self, data_dir, color_index=None, thermal_index=None):
+        self.train_color_image = np.load(
+            os.path.join(data_dir, 'train_rgb_resized_img.npy'))
+        self.train_color_label = np.load(os.path.join(
+            data_dir, 'train_rgb_resized_label.npy'))
 
-        # Load training images (path) and labels
-        if ifDebug:
-            self.train_color_image = np.load(os.path.join(
-                data_dir, 'demo_train_rgb_resized_img.npy'))
-            self.train_color_label = np.load(os.path.join(
-                data_dir, 'demo_train_rgb_resized_label.npy'))
-
-            self.train_thermal_image = np.load(os.path.join(
-                data_dir, 'demo_train_ir_resized_img.npy'))
-            self.train_thermal_label = np.load(os.path.join(
-                data_dir, 'demo_train_ir_resized_label.npy'))
-        else:
-            self.train_color_image = np.load(
-                os.path.join(data_dir, 'train_rgb_resized_img.npy'))
-            self.train_color_label = np.load(os.path.join(
-                data_dir, 'train_rgb_resized_label.npy'))
-
-            self.train_thermal_image = np.load(
-                os.path.join(data_dir, 'train_ir_resized_img.npy'))
-            self.train_thermal_label = np.load(
-                os.path.join(data_dir, 'train_ir_resized_label.npy'))
+        self.train_thermal_image = np.load(
+            os.path.join(data_dir, 'train_ir_resized_img.npy'))
+        self.train_thermal_label = np.load(
+            os.path.join(data_dir, 'train_ir_resized_label.npy'))
 
         print("Color Image Size:{}".format(len(self.train_color_image)))
         print("Color Label Size:{}".format(len(self.train_color_label)))
 
-        self.cIndex = colorIndex
-        self.tIndex = thermalIndex
+        self.cindex = color_index
+        self.tindex = thermal_index
 
     def __next__(self):
         pass
 
     def __getitem__(self, index):
 
-        img1, target1 = self.train_color_image[self.cIndex[index]
-                                               ], self.train_color_label[self.cIndex[index]]
-        img2, target2 = self.train_thermal_image[self.tIndex[index]
-                                                 ], self.train_thermal_label[self.tIndex[index]]
+        img1, target1 = self.train_color_image[self.cindex[index]
+                                               ], self.train_color_label[self.cindex[index]]
+        img2, target2 = self.train_thermal_image[self.tindex[index]
+                                                 ], self.train_thermal_label[self.tindex[index]]
 
         return (img1, img2, target1, target2)
 
     def __len__(self):
         # __len__ function will be called in ds.GeneratorDataset()
-        # print("len_cIndex", self.cIndex.shape)
-        return len(self.cIndex)
+        # print("len_cindex", self.cindex.shape)
+        return len(self.cindex)
 
 
 def load_data(input_data_path):
@@ -79,7 +67,7 @@ class RegDBDatasetGenerator():
     Data Generator for custom DataLoader in mindspore, for RegDB dataset
     """
 
-    def __init__(self, data_dir, trial, colorIndex=None, thermalIndex=None):
+    def __init__(self, data_dir, trial, color_index=None, thermal_index=None):
         # Load training images (path) and labels
         train_color_list = os.path.join(
             data_dir, f'idx/train_visible_{trial}' + '.txt')
@@ -113,15 +101,15 @@ class RegDBDatasetGenerator():
         self.train_thermal_image = train_thermal_image
         self.train_thermal_label = train_thermal_label
 
-        self.cIndex = colorIndex
-        self.tIndex = thermalIndex
+        self.cindex = color_index
+        self.tindex = thermal_index
 
     def __getitem__(self, index):
 
-        img1, target1 = self.train_color_image[self.cIndex[index]],\
-            self.train_color_label[self.cIndex[index]]
-        img2, target2 = self.train_thermal_image[self.tIndex[index]],\
-            self.train_thermal_label[self.tIndex[index]]
+        img1, target1 = self.train_color_image[self.cindex[index]],\
+            self.train_color_label[self.cindex[index]]
+        img2, target2 = self.train_thermal_image[self.tindex[index]],\
+            self.train_thermal_label[self.tindex[index]]
 
         return (img1, img2, target1, target2)
 
@@ -136,8 +124,8 @@ class TestData():
     def __init__(self, test_img_file, test_label, img_size=(144, 288)):
 
         test_image = []
-        for i in range(len(test_img_file)):
-            img = Image.open(test_img_file[i])
+        for _, imgpath in enumerate(test_img_file):
+            img = Image.open(imgpath)
             img = img.resize((img_size[0], img_size[1]), Image.ANTIALIAS)
             pix_array = np.array(img)
             test_image.append(pix_array)
@@ -154,7 +142,7 @@ class TestData():
         return len(self.test_image)
 
 
-def process_query_sysu(data_path, mode='all', relabel=False):
+def process_query_sysu(data_path, mode='all'):
     """
     function of process_query_sysu
     """
@@ -166,7 +154,7 @@ def process_query_sysu(data_path, mode='all', relabel=False):
     file_path = osp.join(data_path, 'exp/test_id.txt')
     files_ir = []
 
-    with open(file_path, 'r') as file:
+    with open(file_path, 'r', encoding='utf-8') as file:
         ids = file.read().splitlines()
         ids = [int(y) for y in ids[0].split(',')]
         ids = ["%04d" % x for x in ids]
@@ -189,7 +177,7 @@ def process_query_sysu(data_path, mode='all', relabel=False):
     return query_img, np.array(query_id), np.array(query_cam)
 
 
-def process_gallery_sysu(data_path, mode='all', random_seed=0, relabel=False):
+def process_gallery_sysu(data_path, mode='all', random_seed=0):
     """
     function of process_query_sysu
     """
@@ -202,7 +190,7 @@ def process_gallery_sysu(data_path, mode='all', random_seed=0, relabel=False):
 
     file_path = osp.join(data_path, 'exp/test_id.txt')
     files_rgb = []
-    with open(file_path, 'r') as file:
+    with open(file_path, 'r', encoding='utf-8') as file:
         ids = file.read().splitlines()
         ids = [int(y) for y in ids[0].split(',')]
         ids = ["%04d" % x for x in ids]
@@ -236,8 +224,8 @@ def process_test_regdb(img_dir, trial=1, modal='visible'):
         input_data_path = osp.join(
             img_dir, 'idx/test_thermal_{}'.format(trial) + '.txt')
 
-    with open(input_data_path) as data_file_list:
-        data_file_list = open(input_data_path, 'rt').read().splitlines()
+    with open(input_data_path, encoding='utf-8') as data_file_list:
+        data_file_list = open(input_data_path, 'rt', encoding='utf-8').read().splitlines()
         # Get full list of image and labels
         file_image = [img_dir + '/' + s.split(' ')[0] for s in data_file_list]
         file_label = [int(s.split(' ')[1]) for s in data_file_list]

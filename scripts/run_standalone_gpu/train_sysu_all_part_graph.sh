@@ -17,12 +17,12 @@ python train.py \
 --lr 0.0035 \
 --device-id 1 \
 --device-target GPU \
---pretrain "/opt_data/ecnu/resnet50.ckpt" \
+--pretrain "resnet50.ckpt" \
 --tag "sysu_all_part_graph" \
---data-path "/opt_data/ecnu/dataset/sysu" \
+--data-path "Define your own path/sysu" \
 --loss-func "id+tri" \
 --branch main \
 --sysu-mode "all" \
 --part 3 \
---graph \
+--graph true\
 --epoch 40

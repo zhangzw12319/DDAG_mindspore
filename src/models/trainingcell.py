@@ -3,8 +3,9 @@ import os
 import psutil
 import numpy as np
 import mindspore as ms
-import mindspore.nn as nn
 import mindspore.ops as P
+
+from mindspore import nn
 from mindspore import ParameterTuple, Tensor, Parameter
 # from mindspore.nn import WithLossCell
 # from IPython import embed
@@ -23,15 +24,15 @@ class CriterionWithNet(nn.Cell):
     """
     class of criterion with network
     """
-    def __init__(self, backbone, ce_loss, tri_loss, lossFunc='id'):
+    def __init__(self, backbone, ce_loss, tri_loss, loss_func='id'):
         super(CriterionWithNet, self).__init__()
         self._backbone = backbone
         self._ce_loss = ce_loss
         self._tri_loss = tri_loss
-        self.lossFunc = lossFunc
+        self.loss_func = loss_func
         self.acc = Parameter(Tensor(np.array([0]), dtype=ms.float32))
         self.total_loss = Parameter(Tensor(np.array([0]), dtype=ms.float32))
-        self.wg = Parameter(Tensor(np.array([0]), dtype=ms.float32))
+        self.wg = Parameter(Tensor(np.array([0.0]), dtype=ms.float32))
 
         # self.total_loss = 0.0
         # self.wg = 0.0
@@ -42,7 +43,7 @@ class CriterionWithNet(nn.Cell):
         self.max = P.ArgMaxWithValue(axis=1)
         self.eq = P.Equal()
 
-    def construct(self, img1, img2, label1, label2, adj, modal=0, cpa=False):
+    def construct(self, img1, img2, label1, label2, adj, modal=0):
         """
         function of constructing
         """
@@ -50,10 +51,10 @@ class CriterionWithNet(nn.Cell):
 
         if self._backbone.nheads > 0:
             feat, _, out, out_att, out_graph = self._backbone(
-                img1, x2=img2, adj=adj, modal=modal, cpa=False)
+                img1, x2=img2, adj=adj, modal=modal)
         else:
             feat, _, out, out_att = self._backbone(
-                img1, x2=img2, modal=modal, cpa=False)
+                img1, x2=img2, modal=modal)
 
         label = self.cat((label1, label2))
         label_ = self.cast(label, ms.int32)
@@ -61,9 +62,9 @@ class CriterionWithNet(nn.Cell):
         loss_id = self._ce_loss(out, label_)
         loss_tri = self._tri_loss(feat, label)
 
-        if self.lossFunc == 'tri':
+        if self.loss_func == 'tri':
             loss_total = loss_tri
-        elif self.lossFunc == 'id+tri':
+        elif self.loss_func == 'id+tri':
             loss_total = loss_id + loss_tri
         else:
             loss_total = loss_id

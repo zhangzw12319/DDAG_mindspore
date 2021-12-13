@@ -5,9 +5,10 @@ loss.py
 # import psutil
 import numpy as np
 import mindspore as ms
-import mindspore.nn as nn
 import mindspore.ops as P
+
 from mindspore import Tensor, context
+from mindspore import nn
 # import mindspore.numpy as mindnp
 
 
@@ -15,10 +16,9 @@ class MarginRankingLoss(nn.Cell):
     """
     class of MarginRankingLoss
     """
-    def __init__(self, margin=0, error_msg=None):
+    def __init__(self, margin=0):
         super(MarginRankingLoss, self).__init__()
         self.margin = margin
-        self.error_msg = error_msg
         self.sub = P.Sub()
         self.mul = P.Mul()
         self.add = P.Add()
@@ -44,10 +44,9 @@ class OriTripletLoss(nn.Cell):
     - margin (float): margin for triplet.
     """
 
-    def __init__(self, margin=0.3, batch_size=64, error_msg=None):
+    def __init__(self, margin=0.3, batch_size=64):
         super(OriTripletLoss, self).__init__()
         self.margin = margin
-        self.error_msg = error_msg
         self.ranking_loss = MarginRankingLoss(self.margin)
 
         self.pow = P.Pow()
@@ -121,7 +120,7 @@ class CenterTripletLoss(nn.Cell):
         super(CenterTripletLoss, self).__init__()
         self.batch_size = batch_size
         self.margin = margin
-        self.OriTripletLoss = OriTripletLoss(
+        self.ori_tri = OriTripletLoss(
             batch_size=batch_size // 4, margin=margin)
         self.unique = P.Unique()
         self.cat = P.Concat()
@@ -151,7 +150,7 @@ class CenterTripletLoss(nn.Cell):
             (input_trans.shape[0], 2 * label_num, input_trans.shape[1] // (2 * label_num)))
         centers = P.ReduceMean()(input_trans, 2)
         new_input = centers.transpose()
-        loss = self.OriTripletLoss(new_input, targets)
+        loss = self.ori_tri(new_input, targets)
 
         return loss
 

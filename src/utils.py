@@ -3,11 +3,9 @@ import os
 import os.path as osp
 import sys
 import numpy as np
-import mindspore as ms
 import mindspore.dataset as ds
-import mindspore.nn as nn
-import mindspore.ops as P
 
+from mindspore import nn
 from mindspore import Tensor
 
 
@@ -136,7 +134,7 @@ class Logger():
         self.file = None
         if fpath is not None:
             mkdir_if_missing(osp.dirname(fpath))
-            self.file = open(fpath, 'w')
+            self.file = open(fpath, 'w', encoding='utf-8')
 
     def __del__(self):
         self.close()
@@ -164,7 +162,7 @@ class Logger():
             self.file.close()
 
 
-class LRScheduler(nn.Cell):
+class LRScheduler():
     r"""
     Gets learning rate warming up + decay.
 
@@ -184,23 +182,23 @@ class LRScheduler(nn.Cell):
 
     """
 
-    def __init__(self, learning_rate, warmup_steps=0, weight_decay=[]):
+    def __init__(self, learning_rate, warmup_steps, weight_decay):
         super(LRScheduler, self).__init__()
         self.warmup_steps = warmup_steps
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
-        self.min = P.Minimum()
-        self.cast = P.Cast()
 
-    def construct(self, global_step):
+    def getlr(self, global_step):
+        """
+        Input global_step, it will calculate current lr
+        """
         if global_step < self.warmup_steps:
-            warmup_percent = self.cast(
-                self.min(global_step, self.warmup_steps), ms.float32) / self.warmup_steps
+            warmup_percent =\
+             min(global_step, self.warmup_steps) / self.warmup_steps
             return self.learning_rate * warmup_percent
         lr = self.learning_rate
         for decay in self.weight_decay:
             if global_step <= decay:
                 break
             lr = lr * 0.1
-        lr = self.cast(lr, ms.float32)
         return lr

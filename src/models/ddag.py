@@ -1,14 +1,16 @@
 """model_main.py"""
 # from unicodedata import normalize
 # import os
-import numpy as np
 import mindspore as ms
-import mindspore.nn as nn
 import mindspore.common.initializer as init
 import mindspore.ops as P
-from mindspore.common.initializer import Initializer, _assignment, random_normal
+
+from mindspore import nn
+from mindspore.common.initializer import Normal
+
 from src.models.resnet import resnet50, resnet50_share, resnet50_specific
 from src.models.attention import IWPA, GraphAttentionLayer
+
 # import psutil
 # from IPython import embed
 
@@ -19,33 +21,6 @@ from src.models.attention import IWPA, GraphAttentionLayer
 #     info = p.memory_full_info()
 #     memory = info.uss/1024./1024
 #     print(f"{hint} memory used: {memory} MB ")
-
-
-class Normal_with_mean(Initializer):
-    """
-    Initialize a normal array, and obtain values N(0, sigma) from the uniform distribution
-    to fill the input tensor.
-
-    Args:
-        sigma (float): The sigma of the array. Default: 0.01.
-
-    Returns:
-        Array, normal array.
-    """
-
-    def __init__(self, mu=0, sigma=0.01):
-        super(Normal_with_mean, self).__init__(sigma=sigma)
-        self.mu = mu
-        self.sigma = sigma
-
-    def _initialize(self, arr):
-        seed, seed2 = self.seed
-        output_tensor = ms.Tensor(np.zeros(
-            arr.shape, dtype=np.float32) + np.ones(arr.shape, dtype=np.float32) * self.mu)
-        random_normal(arr.shape, seed, seed2, output_tensor)
-        output_data = output_tensor.asnumpy()
-        output_data *= self.sigma
-        _assignment(arr, output_data)
 
 
 def weights_init_kaiming(m):
@@ -62,8 +37,8 @@ def weights_init_kaiming(m):
         m.bias.set_data(init.initializer(
             init.Zero(), m.bias.shape, m.bias.dtype))
     elif classname.find('BatchNorm1d') != -1:
-        m.gamma.set_data(init.initializer(Normal_with_mean(
-            mu=1, sigma=0.01), m.gamma.shape, m.gamma.dtype))
+        m.gamma.set_data(init.initializer(Normal(
+            mean=1.0, sigma=0.01), m.gamma.shape, m.gamma.dtype))
         m.beta.set_data(init.initializer(
             init.Zero(), m.beta.shape, m.beta.dtype))
 
@@ -100,12 +75,12 @@ class Normalize(nn.Cell):
         return out
 
 
-class visible_module(nn.Cell):
+class Visible(nn.Cell):
     """
     class of visible module
     """
-    def __init__(self, arch="resnet50", pretrain=""):
-        super(visible_module, self).__init__()
+    def __init__(self, pretrain=""):
+        super(Visible, self).__init__()
 
         # self.visible = resnet50(pretrain=pretrain)
         self.visible = resnet50_specific(pretrain=pretrain)
@@ -121,12 +96,12 @@ class visible_module(nn.Cell):
         return x
 
 
-class thermal_module(nn.Cell):
+class Thermal(nn.Cell):
     """
     class of thermal_module
     """
-    def __init__(self, arch="resnet50", pretrain=""):
-        super(thermal_module, self).__init__()
+    def __init__(self, pretrain=""):
+        super(Thermal, self).__init__()
 
         # self.thermal = resnet50(pretrain=pretrain)
         self.thermal = resnet50_specific(pretrain=pretrain)
@@ -142,9 +117,9 @@ class thermal_module(nn.Cell):
         return x
 
 
-class base_resnet(nn.Cell):
-    def __init__(self, arch="resnet50", pretrain=""):
-        super(base_resnet, self).__init__()
+class BASE(nn.Cell):
+    def __init__(self, pretrain=""):
+        super(BASE, self).__init__()
 
         # self.base = resnet50(pretrain=pretrain)
         self.base = resnet50_share(pretrain=pretrain)
@@ -164,15 +139,15 @@ class ResNet50(nn.Cell):
         return x
 
 
-class embed_net(nn.Cell):
+class DDAG(nn.Cell):
     """
-    class of embed_net
+    class of DDAG
     """
-    def __init__(self, low_dim, class_num=200, drop=0.2, part=0, alpha=0.2, nheads=4, arch="resnet50", pretrain=""):
-        super(embed_net, self).__init__()
-        self.thermal_module = thermal_module(arch=arch, pretrain=pretrain)
-        self.visible_module = visible_module(arch=arch, pretrain=pretrain)
-        self.base_resnet = base_resnet(arch=arch, pretrain=pretrain)
+    def __init__(self, low_dim, class_num=200, drop=0.2, part=0, alpha=0.2, nheads=4, pretrain=""):
+        super(DDAG, self).__init__()
+        self.thermal_module = Thermal(pretrain=pretrain)
+        self.visible_module = Visible(pretrain=pretrain)
+        self.base_resnet = BASE(pretrain=pretrain)
         self.resnet50 = resnet50(pretrain=pretrain)
         pool_dim = 2048
         self.dropout = drop
@@ -205,7 +180,7 @@ class embed_net(nn.Cell):
                 class_num, 4, pool_dim, low_dim, drop, alpha)
 
     # @profile
-    def construct(self, x1, x2=None, adj=None, modal=0, cpa=False):
+    def construct(self, x1, x2=None, adj=None, modal=0):
         """
         function of constructing
         """
@@ -267,7 +242,6 @@ class embed_net(nn.Cell):
             if self.part > 0:
                 return feat, feat_att, out, out_att
             return feat, feat, out, out  # just for debug
-
         else:
             if self.part > 0:
                 return self.l2norm(feat), self.l2norm(feat_att)

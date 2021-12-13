@@ -15,7 +15,7 @@ python train.py \
 --device-target Ascend \
 --pretrain "resnet50.ckpt" \
 --tag "sysu_indoor_part_graph" \
---data-path "" \
+--data-path "Define your own path/sysu" \
 --loss-func "id+tri" \
 --branch main \
 --sysu-mode "indoor" \

@@ -13,7 +13,7 @@
 # limitations under the License.
 # ============================================================================
 """ResNet."""
-import mindspore.nn as nn
+from mindspore import nn
 from mindspore.ops import operations as P
 
 # add by zzw
@@ -205,7 +205,7 @@ class ResNet(nn.Cell):
         return c5
 
 
-class ResNet_Specific(nn.Cell):
+class ResNetSpecific(nn.Cell):
     """
     ResNet architecture.
     Args:
@@ -227,12 +227,11 @@ class ResNet_Specific(nn.Cell):
     """
 
     def __init__(self,
-                 block,
                  layer_nums,
                  in_channels,
                  out_channels,
-                 strides):
-        super(ResNet_Specific, self).__init__()
+                 ):
+        super(ResNetSpecific, self).__init__()
 
         if not len(layer_nums) == len(in_channels) == len(out_channels) == 4:
             raise ValueError(
@@ -252,7 +251,7 @@ class ResNet_Specific(nn.Cell):
         return x
 
 
-class ResNet_Share(nn.Cell):
+class ResNetShare(nn.Cell):
     """
     ResNet architecture.
     Args:
@@ -279,7 +278,7 @@ class ResNet_Share(nn.Cell):
                  in_channels,
                  out_channels,
                  strides):
-        super(ResNet_Share, self).__init__()
+        super(ResNetShare, self).__init__()
 
         if not len(layer_nums) == len(in_channels) == len(out_channels) == 4:
             raise ValueError(
@@ -365,7 +364,7 @@ def resnet50_share(pretrain=""):
     Examples:
         >>> net = resnet50()
     """
-    resnet = ResNet_Share(ResidualBlock,
+    resnet = ResNetShare(ResidualBlock,
                           [3, 4, 6, 3],
                           [64, 256, 512, 1024],
                           [256, 512, 1024, 2048],
@@ -386,11 +385,10 @@ def resnet50_specific(pretrain=""):
     Examples:
         >>> net = resnet50()
     """
-    resnet = ResNet_Specific(ResidualBlock,
-                             [3, 4, 6, 3],
-                             [64, 256, 512, 1024],
-                             [256, 512, 1024, 2048],
-                             [1, 2, 2, 2])
+    resnet = ResNetSpecific([3, 4, 6, 3],
+                            [64, 256, 512, 1024],
+                            [256, 512, 1024, 2048],
+                            )
     if pretrain:
         param_dict = load_checkpoint(pretrain)
         load_param_into_net(resnet, param_dict)

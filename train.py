@@ -34,11 +34,11 @@ from mindspore.nn import SGD, Adam
 from src.dataset import SYSUDatasetGenerator, RegDBDatasetGenerator, TestData,\
     process_query_sysu, process_gallery_sysu, process_test_regdb
 from src.evalfunc import test
-from src.models.ddag import embed_net
+from src.models.ddag import DDAG
 from src.models.trainingcell import CriterionWithNet, OptimizerWithNetAndCriterion
 from src.loss import OriTripletLoss, CenterTripletLoss
 from src.utils import IdentitySampler, genidx, AverageMeter, get_param_list,\
-    LRScheduler, DistributedIdentitySampler
+    LRScheduler
 
 from PIL import Image
 # from IPython import embed
@@ -76,8 +76,6 @@ def get_parser():
                         help='num of pos per identity in each modality')
     parser.add_argument('--trial', default=1, type=int,
                         metavar='t', help='trial (only for RegDB dataset)')
-    parser.add_argument('--debug', default="no", choices=["yes", "no"],
-                        help='if set yes, use demo dataset for debugging,(only for SYSU dataset)')
 
     # image transform
     parser.add_argument('--img-w', default=144, type=int,
@@ -88,8 +86,6 @@ def get_parser():
     # model
     parser.add_argument('--low-dim', default=512, type=int,
                         metavar='D', help='feature dimension')
-    parser.add_argument('--arch', default='resnet50', type=str,
-                        help='network baseline:resnet50')
     parser.add_argument('--part', default=0, type=int,
                         metavar='tb', help='part number, either add weighted part attention  module')
     parser.add_argument('--graph', action='store_true',
@@ -126,10 +122,8 @@ def get_parser():
     # the number set in the environment variable 'CUDA_VISIBLE_DEVICES'.
     #  For example, if export CUDA_VISIBLE_DEVICES=4,5,6, the 'device_id' can be 0,1,2 at the moment,
     # 'device_id' starts from 0, and 'device_id'=0 means using GPU of number 4.
-    parser.add_argument('--device-id', default=0, type=int, help='')
+    parser.add_argument('--device-id', default=0, type=int, help='used in Ascend to speicfy device number')
 
-    # parser.add_argument('--device-num', default=1, type=int,
-    #                     help='the total number of available gpus')
     parser.add_argument('--resume', '-r', default='', type=str,
                         help='resume from checkpoint, no resume:""')
     parser.add_argument('--pretrain', type=str, default="",
@@ -200,14 +194,12 @@ def decode(img):
     return Image.fromarray(img)
 
 
-def optim(epoch_info, backbone_lr_scheduler_info, head_lr_scheduler_info):
+def optim(epoch_info, backbone_lr_s, head_lr_s):
     """
     Define optimizers
     """
-
-    epoch_info = ms.Tensor(epoch_info, ms.int32)
-    backbone_lr = float(backbone_lr_scheduler_info(epoch_info).asnumpy())
-    head_lr = float(head_lr_scheduler_info(epoch_info).asnumpy())
+    backbone_lr = float(backbone_lr_s.getlr(epoch_info))
+    head_lr = float(head_lr_s.getlr(epoch_info))
 
     if args.optim == 'sgd':
         ignored_params = list(map(id, net.bottleneck.trainable_params())) \
@@ -218,7 +210,7 @@ def optim(epoch_info, backbone_lr_scheduler_info, head_lr_scheduler_info):
         base_params = list(
             filter(lambda p: id(p) not in ignored_params, net.trainable_params()))
 
-        optimizer_P_info = SGD([
+        opt_p = SGD([
             {'params': base_params, 'lr': backbone_lr},
             {'params': net.bottleneck.trainable_params(), 'lr': head_lr},
             {'params': net.classifier.trainable_params(), 'lr': head_lr},
@@ -236,7 +228,7 @@ def optim(epoch_info, backbone_lr_scheduler_info, head_lr_scheduler_info):
         base_params = list(
             filter(lambda p: id(p) not in ignored_params, net.trainable_params()))
 
-        optimizer_P_info = Adam([
+        opt_p = Adam([
             {'params': base_params, 'lr': backbone_lr},
             {'params': net.bottleneck.trainable_params(), 'lr': head_lr},
             {'params': net.classifier.trainable_params(), 'lr': head_lr},
@@ -245,7 +237,7 @@ def optim(epoch_info, backbone_lr_scheduler_info, head_lr_scheduler_info):
         ],
                                 learning_rate=args.lr, weight_decay=5e-4)
 
-    return optimizer_P_info
+    return opt_p
 
 
 if __name__ == "__main__":
@@ -268,12 +260,9 @@ if __name__ == "__main__":
                             device_target=device, save_graphs=False)
 
     if device == "CPU":
-        local_data_path = args.data_path
         args.run_distribute = False
     else:
         if device in ["GPU", "Ascend"]:
-            local_data_path = args.data_path
-            print(type(args.device_id))
             context.set_context(device_id=args.device_id)
 
         if args.parameter_server:
@@ -312,11 +301,22 @@ if __name__ == "__main__":
             # Adapt to Cloud: used for downloading data from OBS to docker on the cloud
             import moxing as mox
 
+            # Adapt to Cloud: used for downloading data from OBS to docker on the cloud
+            import moxing as mox
+
             local_data_path = "/cache/data"
             args.data_path = local_data_path
             print("Download data...")
             mox.file.copy_parallel(src_url=args.data_url,
                                    dst_url=local_data_path)
+            print("Download complete!(#^.^#)")
+
+            local_pretrainmodel_path = "/cache/pretrain_model"
+            pretrain_temp = args.pretrain
+            args.pretrain = local_pretrainmodel_path + "/resnet50.ckpt"
+            print("Download pretrain model..")
+            mox.file.copy_parallel(src_url=pretrain_temp,
+                                   dst_url=local_pretrainmodel_path)
             print("Download complete!(#^.^#)")
             # print(os.listdir(local_data_path))
 
@@ -349,8 +349,8 @@ if __name__ == "__main__":
         suffix = suffix + "_" + args.branch_name
 
         time_msg = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
-        log_file = open(osp.join(checkpoint_path,
-                                 "{}_performance_{}.txt".format(suffix, time_msg)), "w")
+        log_file = open(osp.join(checkpoint_path,\
+                "{}_performance_{}.txt".format(suffix, time_msg)), "w", encoding='utf-8')
 
         print('Args: {}'.format(args))
         print('Args: {}'.format(args), file=log_file)
@@ -364,16 +364,12 @@ if __name__ == "__main__":
     ########################################################################
     dataset_type = args.dataset
 
-    if dataset_type == "SYSU":
-        data_path = args.data_path
-    elif dataset_type == "RegDB":
-        data_path = args.data_path
+    data_path = args.data_path
 
     best_acc = 0
     best_acc = 0  # best test accuracy
     start_epoch = 1
     feature_dim = args.low_dim
-    wG = 0
     start_time = time.time()
 
     print("==> Loading data")
@@ -415,11 +411,9 @@ if __name__ == "__main__":
         ]
     )
 
-    ifDebug_dic = {"yes": True, "no": False}
     if dataset_type == "SYSU":
-        # train_set 
-        trainset_generator = SYSUDatasetGenerator(
-            data_dir=data_path, ifDebug=ifDebug_dic.get(args.debug))
+        # train_set
+        trainset_generator = SYSUDatasetGenerator(data_dir=data_path)
 
         color_pos, thermal_pos = genidx(
             trainset_generator.train_color_label, trainset_generator.train_thermal_label)
@@ -477,11 +471,11 @@ if __name__ == "__main__":
     ngall = len(gall_label)
 
     if args.graph:
-        net = embed_net(args.low_dim, class_num=n_class, drop=args.drop,
-                        part=args.part, nheads=4, arch=args.arch, pretrain=args.pretrain)
+        net = DDAG(args.low_dim, class_num=n_class, drop=args.drop,
+                        part=args.part, nheads=4, pretrain=args.pretrain)
     else:
-        net = embed_net(args.low_dim, class_num=n_class, drop=args.drop,
-                        part=args.part, nheads=0, arch=args.arch, pretrain=args.pretrain)
+        net = DDAG(args.low_dim, class_num=n_class, drop=args.drop,
+                        part=args.part, nheads=0, pretrain=args.pretrain)
 
     if len(args.resume) > 0:
         print("Resume checkpoint:{}". format(args.resume))
@@ -504,10 +498,10 @@ if __name__ == "__main__":
 
     if args.triloss == "Ori":
         net_with_criterion = CriterionWithNet(
-            net, CELossNet, OriTriLossNet, lossFunc=args.loss_func)
+            net, CELossNet, OriTriLossNet, loss_func=args.loss_func)
     else:
         net_with_criterion = CriterionWithNet(
-            net, CELossNet, CenterTriLossNet, lossFunc=args.loss_func)
+            net, CELossNet, CenterTriLossNet, loss_func=args.loss_func)
 
     ########################################################################
     # Define schedulers
@@ -528,7 +522,7 @@ if __name__ == "__main__":
     print('==> Start Training...', file=log_file)
     log_file.flush()
 
-    best_mAP = 0.0
+    best_map = 0.0
     best_r1 = 0.0
     best_epoch = 0
     best_param_list = None
@@ -542,20 +536,12 @@ if __name__ == "__main__":
 
         print('==> Preparing Data Loader...')
         # identity sampler:
-        if args.run_distribute:
-            num_shards = get_group_size()
-            shard_id = get_rank()
-            sampler = DistributedIdentitySampler(trainset_generator.train_color_label,\
-                                  trainset_generator.train_thermal_label,\
-                                  color_pos, thermal_pos, args.num_pos, args.batch_size,\
-                                  num_shards, shard_id)
-        else:
-            sampler = IdentitySampler(trainset_generator.train_color_label,\
+        sampler = IdentitySampler(trainset_generator.train_color_label,\
                                   trainset_generator.train_thermal_label,\
                                   color_pos, thermal_pos, args.num_pos, args.batch_size)
 
-        trainset_generator.cIndex = sampler.index1  # color index
-        trainset_generator.tIndex = sampler.index2  # thermal index
+        trainset_generator.cindex = sampler.index1  # color index
+        trainset_generator.tindex = sampler.index2  # thermal index
 
         # add sampler
         if args.run_distribute:
@@ -574,8 +560,8 @@ if __name__ == "__main__":
         trainset = trainset.map(
             operations=transform_train_ir, input_columns=["thermal"])
 
-        trainset.cIndex = sampler.index1  # color index
-        trainset.tIndex = sampler.index2  # infrared index
+        trainset.cindex = sampler.index1  # color index
+        trainset.tindex = sampler.index2  # infrared index
         print("Epoch [{}]".format(str(epoch)))
         print("Epoch [{}]".format(str(epoch)), file=log_file)
 
@@ -624,15 +610,14 @@ if __name__ == "__main__":
             net_with_criterion.wg = 1. / \
                 (1. + Tensor(np.array(loss_avg.avg), ms.float32))
 
-            if batch_idx % 100 == 0:
+            if (batch_idx != 0) and (batch_idx % 100 == 0):
                 print('Epoch: [{}][{}/{}]   '
                       'LR: {LR:.12f}   '
                       'Loss:{Loss:.4f}   '
                       'Batch Time:{batch_time:.2f}  '
                       # 'Accuracy:{acc:.4f}   '
                       .format(epoch, batch_idx, total_batch,
-                              LR=float(head_lr_scheduler(
-                                  ms.Tensor(epoch, ms.int32)).asnumpy()),
+                              LR=float(head_lr_scheduler.getlr(epoch)),
                               Loss=float(loss_avg.avg),
                               batch_time=batch_time.avg,
                               # acc = float(acc.avg * 100)
@@ -643,8 +628,7 @@ if __name__ == "__main__":
                       'Batch Time:{batch_time:.3f}  '
                       # 'Accuracy:{acc:.4f}   '
                       .format(epoch, batch_idx, total_batch,
-                              LR=float(head_lr_scheduler(
-                                  ms.Tensor(epoch, ms.int32)).asnumpy()),
+                              LR=float(head_lr_scheduler.getlr(epoch)),
                               Loss=float(loss.asnumpy()),
                               batch_time=batch_time.avg,
                               # acc = float(acc.avg * 100)
@@ -703,8 +687,8 @@ if __name__ == "__main__":
                 save_checkpoint(save_param_list, path)
 
             # Record the best performance
-            if (mAP > best_mAP) or (mAP_att > best_mAP):
-                best_mAP = max(mAP, best_mAP)
+            if (mAP > best_map) or (mAP_att > best_map):
+                best_map = max(mAP, best_map)
 
             if (cmc[0] > best_r1) or (cmc_att[0] > best_r1):
                 best_param_list = save_param_list
@@ -735,9 +719,9 @@ if __name__ == "__main__":
         print(
             f"For RegDB {args.regdb_mode} search, the testing result is:", file=log_file)
 
-    print(f"Best: rank-1: {best_r1:.2%}, mAP: {best_mAP:.2%}, \
+    print(f"Best: rank-1: {best_r1:.2%}, mAP: {best_map:.2%}, \
         Best epoch: {best_epoch}(according to Rank-1)")
-    print(f"Best: rank-1: {best_r1:.2%}, mAP: {best_mAP:.2%}, \
+    print(f"Best: rank-1: {best_r1:.2%}, mAP: {best_map:.2%}, \
         Best epoch: {best_epoch}(according to Rank-1)", file=log_file)
 
     time_msg = time.strftime("%Y-%m-%d_%H-%M-%S", time.localtime())
