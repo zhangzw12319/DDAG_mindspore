@@ -1,3 +1,17 @@
+# Copyright 2021 Huawei Technologies Co., Ltd
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ============================================================================
 """trainingcell.py"""
 import os
 import psutil
@@ -7,8 +21,6 @@ import mindspore.ops as P
 
 from mindspore import nn
 from mindspore import ParameterTuple, Tensor, Parameter
-# from mindspore.nn import WithLossCell
-# from IPython import embed
 
 
 def show_memory_info(hint=""):
@@ -30,9 +42,10 @@ class CriterionWithNet(nn.Cell):
         self._ce_loss = ce_loss
         self._tri_loss = tri_loss
         self.loss_func = loss_func
-        self.acc = Parameter(Tensor(np.array([0]), dtype=ms.float32))
-        self.total_loss = Parameter(Tensor(np.array([0]), dtype=ms.float32))
-        self.wg = Parameter(Tensor(np.array([0.0]), dtype=ms.float32))
+        self.total_loss = Parameter(Tensor(np.array([0]), dtype=ms.float32),\
+            name="total_loss", requires_grad=True)
+        self.wg = Parameter(Tensor(np.array([0.0]), dtype=ms.float32),\
+            name="wg", requires_grad=False)
 
         # self.total_loss = 0.0
         # self.wg = 0.0
@@ -77,11 +90,9 @@ class CriterionWithNet(nn.Cell):
             loss_g = P.NLLLoss("mean")(out_graph, label_,
                                        P.Ones()((out_graph.shape[1]), ms.float32))
             loss_total = loss_total + self.wg * loss_g[0]
-
-        # predict, _ = self.max(out)
-        # correct = self.eq(predict, label_)
-        # self.acc = ms.numpy.array([ms.numpy.where(correct)[0].shape[0] / label_.shape[0]])
+            
         self.total_loss = loss_total
+        P.Depend()(loss_total, P.Assign()(self.total_loss, P.ExpandDims(self.total_loss, 0)))
 
         return loss_total
 

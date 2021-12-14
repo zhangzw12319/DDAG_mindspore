@@ -1,6 +1,18 @@
+# Copyright 2021 Huawei Technologies Co., Ltd
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ============================================================================
 """model_main.py"""
-# from unicodedata import normalize
-# import os
 import mindspore as ms
 import mindspore.common.initializer as init
 import mindspore.ops as P
@@ -10,17 +22,6 @@ from mindspore.common.initializer import Normal
 
 from src.models.resnet import resnet50, resnet50_share, resnet50_specific
 from src.models.attention import IWPA, GraphAttentionLayer
-
-# import psutil
-# from IPython import embed
-
-# def show_memory_info(hint=""):
-#     pid = os.getpid()
-
-#     p = psutil.Process(pid)
-#     info = p.memory_full_info()
-#     memory = info.uss/1024./1024
-#     print(f"{hint} memory used: {memory} MB ")
 
 
 def weights_init_kaiming(m):
@@ -81,18 +82,11 @@ class Visible(nn.Cell):
     """
     def __init__(self, pretrain=""):
         super(Visible, self).__init__()
-
-        # self.visible = resnet50(pretrain=pretrain)
         self.visible = resnet50_specific(pretrain=pretrain)
 
     def construct(self, x):
-        # x = self.visible.conv1(x)
-        # x = self.visible.bn1(x)
-        # x = self.visible.relu(x)
-        # x = self.visible.maxpool(x)
 
         x = self.visible(x)
-
         return x
 
 
@@ -103,14 +97,9 @@ class Thermal(nn.Cell):
     def __init__(self, pretrain=""):
         super(Thermal, self).__init__()
 
-        # self.thermal = resnet50(pretrain=pretrain)
         self.thermal = resnet50_specific(pretrain=pretrain)
 
     def construct(self, x):
-        # x = self.thermal.conv1(x)
-        # x = self.thermal.bn1(x)
-        # x = self.thermal.relu(x)
-        # x = self.thermal.maxpool(x)
 
         x = self.thermal(x)
 
@@ -120,8 +109,6 @@ class Thermal(nn.Cell):
 class BASE(nn.Cell):
     def __init__(self, pretrain=""):
         super(BASE, self).__init__()
-
-        # self.base = resnet50(pretrain=pretrain)
         self.base = resnet50_share(pretrain=pretrain)
 
     def construct(self, x):
@@ -189,19 +176,6 @@ class DDAG(nn.Cell):
         out_att = None
         out_graph = None
 
-        # if modal == 0:
-        #     x1 = self.visible_module(x1)
-        #     x2 = self.thermal_module(x2)
-        #     x = self.cat((x1, x2))
-        # elif modal == 1:
-        #     x = self.visible_module(x1)
-        # elif modal == 2:
-        #     x = self.thermal_module(x2)
-
-        # # shared four blocks
-        # # print("x.shape is ", x.shape)
-        # x = self.base_resnet(x) # N x 2048 x 9 x 5
-
         # modify version
         if modal == 0:
             x = self.cat((x1, x2))
@@ -210,12 +184,8 @@ class DDAG(nn.Cell):
         else:
             x = x2
         x = self.resnet50(x)
-        # print("x.shape is ", x.shape)
         x_pool = self.avgpool(x, (2, 3))
-        # print("x_pool.shape is ", x_pool.shape)
         x_pool = x_pool.view(x_pool.shape[0], x_pool.shape[1])
-        # print("After Reshape:", x_pool.shape)
-        # print("x_pool is :", x_pool)
         feat = self.bottleneck(x_pool)  # mindspore version >=1.3.0
 
         if self.part > 0:
