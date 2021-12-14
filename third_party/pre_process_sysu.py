@@ -1,4 +1,6 @@
 """pre_process_sysu.py"""
+# from
+# github.com/mangye16/Cross-Modal-Re-ID-baseline/blob/master/pre_process_sysu.py
 import os
 import numpy as np
 from PIL import Image

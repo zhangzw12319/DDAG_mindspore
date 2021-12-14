@@ -1,13 +1,23 @@
+# Copyright 2021 Huawei Technologies Co., Ltd
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ============================================================================
+
 """eval.py"""
 import os
 import time
 import numpy as np
 import psutil
-# import mindspore as ms
-# import mindspore.nn as nn
-# import mindspore.ops as P
-# from mindspore import DatasetHelper
-# from IPython import embed
 
 
 def show_memory_info(hint=""):
@@ -152,7 +162,7 @@ def eval_sysu(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=20):
     new_all_cmc = np.asarray(new_all_cmc).astype(np.float32)
     new_all_cmc = new_all_cmc.sum(0) / num_valid_q
     map_ = np.mean(all_AP)
-    # mINP = np.mean(all_INP)
+
     return new_all_cmc, map_
 
 
@@ -222,5 +232,5 @@ def eval_regdb(distmat, q_pids, g_pids, max_rank=20):
     all_cmc = np.asarray(all_cmc).astype(np.float32)
     all_cmc = all_cmc.sum(0) / num_valid_q
     map_ = np.mean(all_AP)
-    # mINP = np.mean(all_INP)
+
     return all_cmc, map_

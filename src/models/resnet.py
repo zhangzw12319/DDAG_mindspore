@@ -15,9 +15,6 @@
 """ResNet."""
 from mindspore import nn
 from mindspore.ops import operations as P
-
-# add by zzw
-# 2021.07.14
 from mindspore.train.serialization import load_checkpoint, load_param_into_net
 
 

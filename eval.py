@@ -1,20 +1,25 @@
-"""
-DDAG Mindspore version(2021.07)
-Developer List:
-[@zhangzw12319](https://github.com/zhangzw12319)
-[@sunhz0117](https://github.com/sunhz0117)
-Pytorch Code & Original Paper from https://github.com/mangye16/DDAG
-"""
+# Copyright 2021 Huawei Technologies Co., Ltd
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ============================================================================
+
 
 import os
 import os.path as osp
-# import sys
 import time
 import argparse
 import psutil
 import numpy as np
-# import mindspore as ms
-# import mindspore.nn as nn
 import mindspore.dataset as ds
 import mindspore.dataset.vision.py_transforms as py_trans
 
@@ -180,8 +185,6 @@ if __name__ == "__main__":
                 # mixed precision setting
                 context.set_auto_parallel_context(
                     all_reduce_fusion_config=[85, 160])
-        # end of if target="Ascend":
-    # end of if args.run_distribute:
 
         # Adapt to Huawei Cloud: download data from obs to local location
         if device == "Cloud":

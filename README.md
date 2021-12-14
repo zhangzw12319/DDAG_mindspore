@@ -55,13 +55,18 @@ dataset
 
 Then you can set `--data-path Your own path/dataset/sysu` or `--data-path Your own path/dataset/regdb` according to above dataset structure. It's OK if you want to customize your data path.  But please note that the important thing is to set path to the folder which directly contains `cam X` etc. directories and ensures `.npy` files also inside(for SYSU-MM01), or to the folder which directly contains `idx` etc. directories(for RegDB).
 
-## Requirements
+## Environment Requirements
 
-- Python==3.7.5
-- Mindspore>=1.3.0(See [Installation](https://www.mindspore.cn/install/))
-- Cuda==10.1
-- psutil*==5.8.0
-- tqdm*==4.56.0
+- Hardware
+   - Support Ascend and GPU environment.
+- Framework
+   - [Mindspore](https://www.mindspore.cn)
+- Third Package
+   - Python==3.7.5
+   - Mindspore>=1.3.0(See [Installation](https://www.mindspore.cn/install/))
+   - Cuda==10.1
+   - psutil*==5.8.0
+   - tqdm*==4.56.0
 
 *Note: these third party package are not stricted a specific version. For more details, please see `requriements.txt`.
 
@@ -129,9 +134,10 @@ MVD
 │     ├── loss.py                                     # loss function
 │     └── utils.py                                    # utils, including sampler, logging, etc
 │
+├── third_party
+│     └── pre_process_sysu.py                         # SYSU-MM01 dataset preprocessing
 ├── train.py                                          # training script
 ├── eval.py                                           # testing script
-├── pre_process_sysu.py                               # SYSU-MM01 dataset preprocessing
 ├── requirements.txt
 └── README.md
 
@@ -390,5 +396,10 @@ booktitle={European Conference on Computer Vision (ECCV)},
 year={2020},
 }
 ```
+
+DDAG_mindspore version 2021.12
+Developer List:
+[@zhangzw12319](https://github.com/zhangzw12319)
+[@sunhz0117](https://github.com/sunhz0117)
 
 Please kindly reference the url of mindspore repository in your code if it helps your research and code.

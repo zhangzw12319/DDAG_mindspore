@@ -1,15 +1,25 @@
-"""
-loss.py
-"""
-# import os
-# import psutil
+# Copyright 2021 Huawei Technologies Co., Ltd
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ============================================================================
+
+"""loss.py"""
 import numpy as np
 import mindspore as ms
 import mindspore.ops as P
 
 from mindspore import Tensor, context
 from mindspore import nn
-# import mindspore.numpy as mindnp
 
 
 class MarginRankingLoss(nn.Cell):
@@ -76,8 +86,6 @@ class OriTripletLoss(nn.Cell):
         - targets: ground truth labels with shape (num_classes)
         """
 
-        # bs = inputs.shape[0]
-
         # Compute pairwise distance, replace by the official when merged
         dist = self.pow(inputs, 2)
         dist = self.sum(dist, 1)
@@ -106,8 +114,6 @@ class OriTripletLoss(nn.Cell):
         y = self.ones_like(dist_an)
         loss = self.ranking_loss(dist_an, dist_ap, y)
 
-        # # compute accuracy
-        # correct = torch.ge(dist_an, dist_ap).sum().item()
         return loss[0]
 
 
@@ -153,23 +159,3 @@ class CenterTripletLoss(nn.Cell):
         loss = self.ori_tri(new_input, targets)
 
         return loss
-
-
-if __name__ == "__main__":
-    context.set_context(mode=context.GRAPH_MODE,
-                        device_target="GPU", save_graphs=False)
-    # context.set_context(mode=context.PYNATIVE_MODE, device_target="GPU", save_graphs=False)
-    lossNet = OriTripletLoss(margin=0.3, batch_size=2 * 32)
-    data = np.load(
-        "/home/shz/pytorch/shz/DDAG_mindspore_zzw/batchdata.npy", allow_pickle=True)
-    label_info = np.load(
-        "/home/shz/pytorch/shz/DDAG_mindspore_zzw/batchlabel.npy", allow_pickle=True)
-    print(data)
-    print(label_info)
-    data = Tensor(data, dtype=ms.float32)
-    label_info = Tensor(label_info, dtype=ms.int32)
-    print("Before")
-
-    loss_info = lossNet(data, label_info)
-    print("After")
-    print(loss_info)

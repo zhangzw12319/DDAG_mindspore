@@ -1,3 +1,17 @@
+# Copyright 2021 Huawei Technologies Co., Ltd
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# ============================================================================
 """
 DDAG Mindspore version(2021.07)
 Developer List:
@@ -8,7 +22,6 @@ Pytorch Code & Original Paper from https://github.com/mangye16/DDAG
 
 import os
 import os.path as osp
-# import sys
 import time
 
 import argparse
@@ -17,7 +30,6 @@ import numpy as np
 import mindspore as ms
 import mindspore.nn as nn
 import mindspore.dataset as ds
-# import mindspore.dataset.vision.c_transforms as c_trans
 import mindspore.dataset.vision.py_transforms as py_trans
 
 from mindspore import context, load_checkpoint, load_param_into_net, save_checkpoint, DatasetHelper, Tensor
@@ -25,10 +37,7 @@ from mindspore.context import ParallelMode
 from mindspore.communication import init, get_group_size, get_rank
 from mindspore.dataset.transforms.py_transforms import Compose
 from mindspore.train.callback import LossMonitor
-# from mindspore.train.dataset_helper import connect_network_with_dataset
 from mindspore.nn import SGD, Adam
-# from mindspore.profiler import Profiler
-# from line_profiler import LineProfiler
 
 
 from src.dataset import SYSUDatasetGenerator, RegDBDatasetGenerator, TestData,\
@@ -41,7 +50,6 @@ from src.utils import IdentitySampler, genidx, AverageMeter, get_param_list,\
     LRScheduler
 
 from PIL import Image
-# from IPython import embed
 from tqdm import tqdm
 
 
@@ -282,7 +290,6 @@ if __name__ == "__main__":
                 context.set_auto_parallel_context(
                     all_reduce_fusion_config=[85, 160])
 
-
             # GPU target
             else:
                 init()
@@ -293,8 +300,6 @@ if __name__ == "__main__":
                 # mixed precision setting
                 context.set_auto_parallel_context(
                     all_reduce_fusion_config=[85, 160])
-        # end of if target="Ascend":
-    # end of if args.run_distribute:
 
         # Adapt to Huawei Cloud: download data from obs to local location
         if device == "Cloud":
@@ -565,14 +570,9 @@ if __name__ == "__main__":
         print("Epoch [{}]".format(str(epoch)))
         print("Epoch [{}]".format(str(epoch)), file=log_file)
 
-        # define callbacks
-        loss_cb = LossMonitor()
-        cb = [loss_cb]
-
         trainset = trainset.batch(batch_size=loader_batch, drop_remainder=True)
 
         dataset_helper = DatasetHelper(trainset, dataset_sink_mode=False)
-        # net_with_optim = connect_network_with_dataset(net_with_optim, dataset_helper)
 
         batch_idx = 0
         N = np.maximum(len(trainset_generator.train_color_label),
@@ -620,7 +620,6 @@ if __name__ == "__main__":
                               LR=float(head_lr_scheduler.getlr(epoch)),
                               Loss=float(loss_avg.avg),
                               batch_time=batch_time.avg,
-                              # acc = float(acc.avg * 100)
                               ))
                 print('Epoch: [{}][{}/{}]   '
                       'LR: {LR:.12f}   '
@@ -631,7 +630,6 @@ if __name__ == "__main__":
                               LR=float(head_lr_scheduler.getlr(epoch)),
                               Loss=float(loss.asnumpy()),
                               batch_time=batch_time.avg,
-                              # acc = float(acc.avg * 100)
                               ), file=log_file)
 
         #############################################
