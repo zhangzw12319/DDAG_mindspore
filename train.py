@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
+"""train.py"""
 
 import os
 import os.path as osp
@@ -29,7 +30,6 @@ from mindspore import context, load_checkpoint, load_param_into_net, save_checkp
 from mindspore.context import ParallelMode
 from mindspore.communication import init, get_group_size, get_rank
 from mindspore.dataset.transforms.py_transforms import Compose
-from mindspore.train.callback import LossMonitor
 from mindspore.nn import SGD, Adam
 
 

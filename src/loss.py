@@ -14,11 +14,9 @@
 # ============================================================================
 
 """loss.py"""
-import numpy as np
 import mindspore as ms
 import mindspore.ops as P
 
-from mindspore import Tensor, context
 from mindspore import nn
 
 

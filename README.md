@@ -90,6 +90,7 @@ sh run_standalone_train_sysu_all_ascend.sh
 ## Script Description
 
 ### Scripts and Sample Code
+
 ```
 DDAG_mindspore
 ├── eval.py

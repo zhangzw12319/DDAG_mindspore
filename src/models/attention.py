@@ -37,7 +37,7 @@ class IWPA(nn.Cell):
         self.part = part
         self.l2norm = L2Normalize()
         self.softmax = nn.Softmax(axis=-1)
-        
+
         device_target = context.get_context("device_target")
         print(device_target)
         if device_target == "GPU":
