@@ -12,13 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""
-DDAG Mindspore version(2021.07)
-Developer List:
-[@zhangzw12319](https://github.com/zhangzw12319)
-[@sunhz0117](https://github.com/sunhz0117)
-Pytorch Code & Original Paper from https://github.com/mangye16/DDAG
-"""
 
 import os
 import os.path as osp
@@ -603,7 +596,7 @@ if __name__ == "__main__":
                 loss = net_with_optim(img1, img2, label1, label2, adjacency)
             else:
                 loss = net_with_optim(img1, img2, label1, label2, None)
-            acc.update(net_with_criterion.acc.asnumpy())
+
             batch_time.update(time.time() - end_time)
             end_time = time.time()
             loss_avg.update(loss.asnumpy())
@@ -615,7 +608,6 @@ if __name__ == "__main__":
                       'LR: {LR:.12f}   '
                       'Loss:{Loss:.4f}   '
                       'Batch Time:{batch_time:.2f}  '
-                      # 'Accuracy:{acc:.4f}   '
                       .format(epoch, batch_idx, total_batch,
                               LR=float(head_lr_scheduler.getlr(epoch)),
                               Loss=float(loss_avg.avg),
@@ -625,7 +617,6 @@ if __name__ == "__main__":
                       'LR: {LR:.12f}   '
                       'Loss:{Loss:.4f}   '
                       'Batch Time:{batch_time:.3f}  '
-                      # 'Accuracy:{acc:.4f}   '
                       .format(epoch, batch_idx, total_batch,
                               LR=float(head_lr_scheduler.getlr(epoch)),
                               Loss=float(loss.asnumpy()),

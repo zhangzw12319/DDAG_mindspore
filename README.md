@@ -12,13 +12,13 @@ Mindspore implementation for ***\*****Dynamic Dual-Attentive Aggregation Learnin
 
 ### Preparation
 
-\- (1) SYSU-MM01 Dataset [1]: The SYSU-MM01 dataset can be downloaded from this [website](http://isee.sysu.edu.cn/project/RGBIRReID.htm).
+(1) SYSU-MM01 Dataset [1]: The SYSU-MM01 dataset can be downloaded from this [website](http://isee.sysu.edu.cn/project/RGBIRReID.htm).
 
-\- **run `python pre_process_sysu.py` [link](https://github.com/mangye16/Cross-Modal-Re-ID-baseline/blob/master/pre_process_sysu.py) in to prepare the dataset, the training data will be stored in ".npy" format.**
+**run `python pre_process_sysu.py`  in to prepare the dataset, the training data will be stored in ".npy" format.**
 
-\- (2) RegDB Dataset [2]: The RegDB dataset can be downloaded from this [website](http://dm.dongguk.edu/link.html) by submitting a copyright form.
+(2) RegDB Dataset [2]: The RegDB dataset can be downloaded from this [website](http://dm.dongguk.edu/link.html) by submitting a copyright form.
 
-\- (Named: "Dongguk Body-based Person Recognition Database (DBPerson-Recog-DB1)" on their website).
+(Named: "Dongguk Body-based Person Recognition Database (DBPerson-Recog-DB1)" on their website).
 
 If you have problems for acquiring data, please contact: zhangzw12319@163.com.
 
@@ -74,8 +74,8 @@ Then you can set `--data-path Your own path/dataset/sysu` or `--data-path Your o
 For GPU:
 
 ```shell
-cd DDAG_mindspore/scripts/run_standalone_gpu # please enter this path before sh XXX.sh, otherwise path errors :)
-sh train_sysu_all_part_graph.sh
+cd DDAG_mindspore/scripts/ # please enter this path before sh XXX.sh, otherwise path errors :)
+sh run_standalone_train_sysu_all_gpu.sh
 ```
 
 or
@@ -83,8 +83,8 @@ or
 For Ascend:
 
 ```shell
-cd DDAG_mindspore/scripts/run_standalone_ascend # please enter this path before sh XXX.sh, otherwise path errors :)
-sh train_sysu_all_part_graph.sh
+cd DDAG_mindspore/scripts/ # please enter this path before sh XXX.sh, otherwise path errors :)
+sh run_standalone_train_sysu_all_ascend.sh
 ```
 
 ## Script Description

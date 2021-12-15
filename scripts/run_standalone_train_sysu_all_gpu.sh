@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-myfile="train_sysu_all_part_graph.sh"
+myfile="run_standalone_train_sysu_all_gpu.sh"
 
 if [ ! -f "$myfile" ]; then
-    echo "Please first enter DDAG_mindspore/scripts/run_standalone_train and run. Exit..."
+    echo "Please first enter DDAG_mindspore/scripts and run. Exit..."
     exit 0
 fi
 
-cd ../..
+cd ..
+
+# Note: --pretrain, --data-path arguments support global path or relative path(starting
+#       from project root directory, i.e. /.../DDAG_mindspore/)
 
 python train.py \
 --MSmode "GRAPH_MODE" \
@@ -23,4 +26,4 @@ python train.py \
 --sysu-mode "all" \
 --part 3 \
 --graph True \
---epoch 40
+--epoch 30

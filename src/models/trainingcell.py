@@ -39,11 +39,9 @@ class CriterionWithNet(nn.Cell):
     def __init__(self, backbone, ce_loss, tri_loss, loss_func='id'):
         super(CriterionWithNet, self).__init__()
         self._backbone = backbone
+        self.loss_func = loss_func
         self._ce_loss = ce_loss
         self._tri_loss = tri_loss
-        self.loss_func = loss_func
-        self.total_loss = Parameter(Tensor(np.array([0]), dtype=ms.float32),\
-            name="total_loss", requires_grad=True)
         self.wg = Parameter(Tensor(np.array([0.0]), dtype=ms.float32),\
             name="wg", requires_grad=False)
 
@@ -90,9 +88,6 @@ class CriterionWithNet(nn.Cell):
             loss_g = P.NLLLoss("mean")(out_graph, label_,
                                        P.Ones()((out_graph.shape[1]), ms.float32))
             loss_total = loss_total + self.wg * loss_g[0]
-            
-        self.total_loss = loss_total
-        P.Depend()(loss_total, P.Assign()(self.total_loss, P.ExpandDims(self.total_loss, 0)))
 
         return loss_total
 
@@ -112,12 +107,9 @@ class OptimizerWithNetAndCriterion(nn.Cell):
         self.optimizer = optimizer
         self.grad = P.GradOperation(get_by_list=True)
 
-    def set_sens(self, value):
-        self.sens = value
-
     def construct(self, x1, x2, y1, y2, adj):
+        loss = self.network(x1, x2, y1, y2, adj)
         weights = self.weights
         grads = self.grad(self.network, weights)(x1, x2, y1, y2, adj)
-        # return P.depend(loss, self.optimizer(grads))
-        self.optimizer(grads)
-        return self.network.total_loss
+        loss = P.Depend()(loss, self.optimizer(grads))
+        return loss

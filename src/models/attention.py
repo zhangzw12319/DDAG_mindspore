@@ -19,7 +19,7 @@ import mindspore.common.initializer as weight_init
 import mindspore.ops as P
 import mindspore.numpy as msnp
 
-from mindspore import nn
+from mindspore import nn, context
 from mindspore.ops import L2Normalize, Transpose
 from mindspore.common.initializer import initializer, Constant, XavierUniform
 
@@ -37,10 +37,13 @@ class IWPA(nn.Cell):
         self.part = part
         self.l2norm = L2Normalize()
         self.softmax = nn.Softmax(axis=-1)
-        if ms.__version__ == "1.5.0":
-            self.adaptive_pool_2d = P.AdaptiveAvgPool2D((part, 1)) # for mindspore 1.5.0
+        
+        device_target = context.get_context("device_target")
+        print(device_target)
+        if device_target == "GPU":
+            self.adaptive_pool_2d = P.AdaptiveAvgPool2D((part, 1)) # for GPU
         else:
-            self.adaptive_pool_2d = nn.AvgPool2d((5, 5), (2, 1)) # for mindspore 1.3.0
+            self.adaptive_pool_2d = nn.AvgPool2d((5, 5), (2, 1)) # for Ascend
 
         if self.inter_channels is None:
             self.inter_channels = in_channels
@@ -126,6 +129,7 @@ class GraphAttentionBlock(nn.Cell):
         self.out_features = out_features
         self.alpha = alpha
         self.concat = concat
+        self.zero_approx = -9e15
 
         self.W = ms.Parameter(initializer(
             XavierUniform(), (in_features, out_features), ms.float32))
@@ -149,7 +153,7 @@ class GraphAttentionBlock(nn.Cell):
         e = self.leakyrelu(P.matmul(a_input, self.a))
         e = P.Squeeze(2)(e)  # e: N x N
 
-        zero_vec = -9e15 * P.ones_like(e)
+        zero_vec = self.zero_approx * P.ones_like(e)
         attention = msnp.where(adj > 0, e, zero_vec)
         attention = P.Softmax(1)(attention)
         attention = self.drop(attention)

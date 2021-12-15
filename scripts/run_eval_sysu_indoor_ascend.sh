@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-myfile="test_sysu_indoor_part_graph.sh"
+myfile="run_eval_sysu_indoor_ascend.sh"
 
 if [ ! -f "$myfile" ]; then
-    echo "Please first enter DDAG_mindspore/scripts/run_standalone_train and run. Exit..."
+    echo "Please first enter DDAG_mindspore/scripts/ and run. Exit..."
     exit 0
 fi
 
-cd ../..
+cd ..
+
+# Note: --data-path arguments support global path or relative path(starting
+#       from project root directory, i.e. /.../DDAG_mindspore/)
 
 python eval.py \
+--MSmode "GRAPH_MODE" \
 --dataset SYSU \
 --device-id 0 \
 --device-target Ascend \
