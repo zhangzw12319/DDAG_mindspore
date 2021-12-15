@@ -88,6 +88,12 @@ class CriterionWithNet(nn.Cell):
             loss_g = P.NLLLoss("mean")(out_graph, label_,
                                        P.Ones()((out_graph.shape[1]), ms.float32))
             loss_total = loss_total + self.wg * loss_g[0]
+<<<<<<< HEAD
+=======
+            
+        self.total_loss = loss_total
+        P.Depend()(loss_total, P.Assign()(self.total_loss, P.ExpandDims(self.total_loss, 0)))
+>>>>>>> b82c98c383af04f04123be3e73c8462022faf7fc
 
         return loss_total
 
