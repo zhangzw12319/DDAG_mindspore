@@ -14,7 +14,7 @@ Mindspore implementation for ***\*****Dynamic Dual-Attentive Aggregation Learnin
 
 (1) SYSU-MM01 Dataset [1]: The SYSU-MM01 dataset can be downloaded from this [website](http://isee.sysu.edu.cn/project/RGBIRReID.htm).
 
-**run `python pre_process_sysu.py`  in to prepare the dataset, the training data will be stored in ".npy" format.**
+**run `python pre_process_sysu.py`(in `DDAG_mindspore/third_party/pre_process_sysu.py`) in to prepare the dataset, the training data will be stored in ".npy" format.**
 
 (2) RegDB Dataset [2]: The RegDB dataset can be downloaded from this [website](http://dm.dongguk.edu/link.html) by submitting a copyright form.
 
@@ -92,55 +92,40 @@ sh run_standalone_train_sysu_all_ascend.sh
 ### Scripts and Sample Code
 
 ```
-MVD
-├── scripts                                           # .sh script save place
-│   └── run_standalone_gpu                            # Single machine single graphic card training on GPU
-│   │   │       │                                     # SYSU-MM01 Dataset(Below ↓)
-│   │   │       ├── train_sysu_all_part_graph.sh      # search all mode, baseline+part+graph attention
-│   │   │       ├── train_sysu_all_baseline.sh        # search all mode, baseline
-│   │   │       ├── train_sysu_indoor_part_graph.sh   # search indoor mode, baseline+part+graph attention
-│   │   │       ├── train_sysu_indoor_baseline.sh     # search indoor mode, baseline
-│   │   │                                             # RegDB Dataset(Below ↓)
-│   │   ├── train_regdb_i2v.sh                        # infrared(thermal) to visible
-│   │   └── train_regdb_v2i                           # visible to infrared(thermal)
-│   ├── run_standalone_ascend                         # Single machine single graphic card training on Ascend
-│   │   │       │
-│   │   │       ├── train_sysu_all_part_graph.sh
-│   │   │       ├── train_sysu_all_baseline.sh
-│   │   │       ├── train_sysu_indoor_part_graph.sh
-│   │   │       ├── train_sysu_indoor_baseline.sh
-│   │   │
-│   │   ├── train_regdb_i2v.sh
-│   │   └── train_regdb_v2i
-│   │   ├── run_eval_gpu                              # Testing scripts on GPU
-│   │   │       ├── test_sysu_all_part_graph.sh
-│   │   │       ├── test_sysu_all_baseline.sh
-│   │   │       ├── test_sysu_indoor_part_graph.sh
-│   │   │       └── test_sysu_indoor_baseline.sh
-│   └── run_eval_ascend                               # Testing scripts on Ascend
-│               ├── test_sysu_all_part_graph.sh
-│               ├── test_sysu_all_baseline.sh
-│               ├── test_sysu_indoor_part_graph.sh
-│               └── test_sysu_indoor_baseline.sh
-│
-├── src                                               # source scripts
-│     ├── models                                      # define network
-│     │   ├── ddag.py                                 # DDAG main model
-│     │   ├── resnet.py                               # resnet backbone
-│     │   ├── trainingcell.py                         # network with loss and optimizer cell
-│     │   └── attention.py                            # Part Attention module and Graph Attention Module
-│     │   ├── dataset.py                              # dataset define
-│     ├── evalfunc.py                                 # rank-1 and mAP evaluation function define
-│     ├── loss.py                                     # loss function
-│     └── utils.py                                    # utils, including sampler, logging, etc
-│
-├── third_party
-│     └── pre_process_sysu.py                         # SYSU-MM01 dataset preprocessing
-├── train.py                                          # training script
-├── eval.py                                           # testing script
+DDAG_mindspore
+├── eval.py
+├── README.md
 ├── requirements.txt
-└── README.md
-
+├── scripts
+│   ├── run_eval_regdb_i2v_ascend.sh
+│   ├── run_eval_regdb_i2v_gpu.sh
+│   ├── run_eval_regdb_v2i_ascend.sh
+│   ├── run_eval_regdb_v2i_gpu.sh
+│   ├── run_eval_sysu_all_ascend.sh
+│   ├── run_eval_sysu_all_gpu.sh
+│   ├── run_eval_sysu_indoor_ascend.sh
+│   ├── run_eval_sysu_indoor_gpu.sh
+│   ├── run_standalone_train_regdb_i2v_ascend.sh
+│   ├── run_standalone_train_regdb_i2v_gpu.sh
+│   ├── run_standalone_train_regdb_v2i_ascend.sh
+│   ├── run_standalone_train_regdb_v2i_gpu.sh
+│   ├── run_standalone_train_sysu_all_ascend.sh
+│   ├── run_standalone_train_sysu_all_gpu.sh
+│   ├── run_standalone_train_sysu_indoor_ascend.sh
+│   └── run_standalone_train_sysu_indoor_gpu.sh
+├── src
+│   ├── dataset.py
+│   ├── evalfunc.py
+│   ├── loss.py
+│   ├── models
+│   │   ├── attention.py
+│   │   ├── ddag.py
+│   │   ├── resnet.py
+│   │   └── trainingcell.py
+│   └── utils.py
+├── third_party
+│   └── pre_process_sysu.py
+└── train.py
 ```
 
 ### Script Parameters(Example)
@@ -200,7 +185,7 @@ We recommend that these following hyper-parameters in `.sh` files should be kept
 |    `--optim`     |             choose "adam" or "sgd"(default adam)             |
 |      `--lr`      |     initial learning rate( 0.0035 for adam, 0.1 for sgd)     |
 |     `--tags`     | (optional, but strongly recommended): You can name(tag) your experiments to organize you logs file, e.g. specifying `--tag Exp_1` will put your log files into "logs/Exp_1/XXX/".Default value is "toy", which means toy experiments(e.g. debugging logs). Fore more information, see [log organization](#log) |
-|    `--epoch`     | the total number of training epochs, by default 40 Epochs(may be different from original paper). |
+|    `--epoch`     | the total number of training epochs, by default 30 Epochs(may be different from original paper). |
 | `--warmup-steps` |                warm-up strategy, by default 5                |
 | `--start-decay`  |         the start epoch of lr decay, by default 15.          |
 |  `--end-decay`   |        the ending epoch of lr decay , by default 27.         |
@@ -366,14 +351,14 @@ FC_att:   Rank-1: 57.42% | Rank-5: 82.59% | Rank-10: 90.91%| Rank-20: 96.17%| mA
 
 | Metric | Value(Pytorch) | Value(Mindspore, GPU, --trial 1) |
 | :----: | :------------: | :------------------------------: |
-| Rank-1 |     69.34%     |              85.49%              |
+| Rank-1 |     69.34%     |              80.27%              |
 |  mAP   |     63.46%     |              80.01%              |
 
 ### RegDB(Thermal-Visible)
 
 | Metric | Value(Pytorch) | Value(Mindspore, GPU, --trial 1) |
 | :----: | :------------: | :------------------------------: |
-| Rank-1 |     68.06%     |              84.17%              |
+| Rank-1 |     68.06%     |              79.36%              |
 |  mAP   |     61.80%     |              78.43%              |
 
 ***Note**: The aforementioned pytorch results can be seen in original [pytorch repo](https://github.com/mangye16/DDAG).
