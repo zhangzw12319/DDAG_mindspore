@@ -235,11 +235,9 @@ class LRScheduler():
                 current_lr = final_lr
 
             # fill the steps in current epoch
-            current_epoch_lr = []
+
             for i in range(self.steps_per_epoch):
-                current_epoch_lr.append(current_lr)
                 lr.append(current_lr)
-            print(epoch, "   ", current_lr)
         lr = Tensor(lr, dtype=ms.float32)
 
         return lr

@@ -6,7 +6,7 @@ import numpy as np
 from PIL import Image
 
 # todo_change your own path
-data_path = '/home/datasets/prml/computervision/re-id/sysu-mm01/ori_data'
+data_path = '/disk1/zzw/dataset/sysu'
 
 rgb_cameras = ['cam1', 'cam2', 'cam4', 'cam5']
 ir_cameras = ['cam3', 'cam6']
@@ -75,10 +75,10 @@ def read_imgs(train_image):
 
 # rgb imges
 train_imgs, train_labels = read_imgs(files_rgb)
-np.save(data_path + 'train_rgb_resized_img.npy', train_imgs)
-np.save(data_path + 'train_rgb_resized_label.npy', train_labels)
+np.save(os.path.join(data_path, 'train_rgb_resized_img.npy'), train_imgs)
+np.save(os.path.join(data_path, 'train_rgb_resized_label.npy'), train_labels)
 
 # ir imges
 train_imgs, train_labels = read_imgs(files_ir)
-np.save(data_path + 'train_ir_resized_img.npy', train_imgs)
-np.save(data_path + 'train_ir_resized_label.npy', train_labels)
+np.save(os.path.join(data_path, 'train_ir_resized_img.npy'), train_imgs)
+np.save(os.path.join(data_path, 'train_ir_resized_label.npy'), train_labels)
