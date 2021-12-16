@@ -20,7 +20,7 @@ python train.py \
 --device-target GPU \
 --pretrain "resnet50.ckpt" \
 --tag "regdb_i2v" \
---data-path "/home/shz/pytorch/data/regdb" \
+--data-path "Define your own path/regdb" \
 --loss-func "id+tri" \
 --branch main \
 --regdb-mode "i2v" \

@@ -16,7 +16,7 @@ python train.py \
 --dataset RegDB \
 --optim adam \
 --lr 0.0035 \
---device-id 1 \
+--device-id 0 \
 --device-target Ascend \
 --pretrain "resnet50.ckpt" \
 --tag "regdb_v2i" \

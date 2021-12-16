@@ -17,6 +17,7 @@ import os
 import os.path as osp
 import sys
 import numpy as np
+import mindspore as ms
 import mindspore.dataset as ds
 
 from mindspore import nn
@@ -196,23 +197,49 @@ class LRScheduler():
 
     """
 
-    def __init__(self, learning_rate, warmup_steps, weight_decay):
+    def __init__(self, learning_rate, steps_per_epoch, args):
         super(LRScheduler, self).__init__()
-        self.warmup_steps = warmup_steps
         self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
+        self.steps_per_epoch = steps_per_epoch
+        self.epochs = args.epoch
+        self.warmup_steps = args.warmup_steps
+        self.start_decay = args.start_decay
+        self.end_decay = args.end_decay
+        
+        assert (self.epochs > self.warmup_steps) and (self.start_decay > self.warmup_steps)\
+            and (self.end_decay > self.start_decay)
 
-    def getlr(self, global_step):
+    def getlr(self):
         """
-        Input global_step, it will calculate current lr
+        return lr tensor sized self.epochs x steps_per_epoch
         """
-        if global_step < self.warmup_steps:
-            warmup_percent =\
-             min(global_step, self.warmup_steps) / self.warmup_steps
-            return self.learning_rate * warmup_percent
-        lr = self.learning_rate
-        for decay in self.weight_decay:
-            if global_step <= decay:
-                break
-            lr = lr * 0.1
+        lr = []
+        final_lr = 0.0
+        for epoch in range(1, self.epochs + 1):
+            # calculate the lr for current epoch
+            if epoch < self.warmup_steps:
+                warmup_percent = epoch / self.warmup_steps
+                current_lr = self.learning_rate * warmup_percent
+            elif epoch < self.start_decay:
+                current_lr = self.learning_rate
+            elif epoch <= self.end_decay:
+                current_lr = self.learning_rate
+                for decay in range(self.start_decay, self.end_decay + 1):
+                    if decay <= epoch:
+                        current_lr = current_lr * 0.1
+                    else:
+                        break
+                if epoch == self.end_decay:
+                    final_lr = current_lr
+            else:
+                current_lr = final_lr
+
+            # fill the steps in current epoch
+            current_epoch_lr = []
+            for i in range(self.steps_per_epoch):
+                current_epoch_lr.append(current_lr)
+                lr.append(current_lr)
+            print(epoch, "   ", current_lr)
+        lr = Tensor(lr, dtype=ms.float32)
+
         return lr

@@ -93,9 +93,6 @@ def get_parser():
                         help='either add graph attention or not')
 
     # loss setting
-    parser.add_argument('--epoch', default=40, type=int,
-                        metavar='epoch', help='epoch num')
-    parser.add_argument('--start-epoch', default=1, type=int)
     parser.add_argument('--loss-func', default='id+tri', type=str, choices=['id', 'tri', 'id+tri'],
                         metavar='m', help='specify loss function type')
     parser.add_argument('--triloss', default='Ori',
@@ -111,8 +108,13 @@ def get_parser():
     parser.add_argument('--optim', default='adam', type=str, help='optimizer')
     parser.add_argument("--warmup-steps", default=5,
                         type=int, help='warmup steps')
+    parser.add_argument("--start-decay", default=15, type=int)
+    parser.add_argument("--end-decay", default=27, type=int)
 
     # training configs
+    parser.add_argument('--epoch', default=40, type=int,
+                        metavar='epoch', help='epoch num')
+    parser.add_argument('--start-epoch', default=1, type=int)
     parser.add_argument('--device-target', default="CPU",
                         choices=["CPU", "GPU", "Ascend", "Cloud"])
     parser.add_argument('--gpu', default='0', type=str,
@@ -195,12 +197,8 @@ def decode(img):
     return Image.fromarray(img)
 
 
-def optim(epoch_info, backbone_lr_s, head_lr_s):
-    """
-    Define optimizers
-    """
-    backbone_lr = float(backbone_lr_s.getlr(epoch_info))
-    head_lr = float(head_lr_s.getlr(epoch_info))
+def optim(args, b_lr, h_lr):
+    """ Define optimizers """
 
     if args.optim == 'sgd':
         ignored_params = list(map(id, net.bottleneck.trainable_params())) \
@@ -209,14 +207,14 @@ def optim(epoch_info, backbone_lr_s, head_lr_s):
             + list(map(id, net.graph_att.trainable_params()))
 
         base_params = list(
-            filter(lambda p: id(p) not in ignored_params, net.trainable_params()))
+            filter(lambda p: id(p) not in ignored_params, net.net.trainable_params()))
 
         opt_p = SGD([
-            {'params': base_params, 'lr': backbone_lr},
-            {'params': net.bottleneck.trainable_params(), 'lr': head_lr},
-            {'params': net.classifier.trainable_params(), 'lr': head_lr},
-            {'params': net.wpa.trainable_params(), 'lr': head_lr},
-            {'params': net.graph_att.trainable_params(), 'lr': head_lr}
+            {'params': base_params, 'lr': b_lr},
+            {'params': net.bottleneck.trainable_params(), 'lr': h_lr},
+            {'params': net.classifier.trainable_params(), 'lr': h_lr},
+            {'params': net.wpa.trainable_params(), 'lr': h_lr},
+            {'params': net.graph_att.trainable_params(), 'lr': h_lr}
         ],
                     learning_rate=args.lr, weight_decay=5e-4, nesterov=True, momentum=0.9)
 
@@ -230,11 +228,11 @@ def optim(epoch_info, backbone_lr_s, head_lr_s):
             filter(lambda p: id(p) not in ignored_params, net.trainable_params()))
 
         opt_p = Adam([
-            {'params': base_params, 'lr': backbone_lr},
-            {'params': net.bottleneck.trainable_params(), 'lr': head_lr},
-            {'params': net.classifier.trainable_params(), 'lr': head_lr},
-            {'params': net.wpa.trainable_params(), 'lr': head_lr},
-            {'params': net.graph_att.trainable_params(), 'lr': head_lr}
+            {'params': base_params, 'lr': b_lr},
+            {'params': net.bottleneck.trainable_params(), 'lr': h_lr},
+            {'params': net.classifier.trainable_params(), 'lr': h_lr},
+            {'params': net.wpa.trainable_params(), 'lr': h_lr},
+            {'params': net.graph_att.trainable_params(), 'lr': h_lr}
         ],
                      learning_rate=args.lr, weight_decay=5e-4)
 
@@ -502,12 +500,20 @@ if __name__ == "__main__":
             net, CELossNet, CenterTriLossNet, loss_func=args.loss_func)
 
     ########################################################################
-    # Define schedulers
+    # Define LR Schedulers and Optimizers
     ########################################################################
 
-    backbone_lr_scheduler = LRScheduler(
-        0.1 * args.lr, args.warmup_steps, [15, 27])
-    head_lr_scheduler = LRScheduler(args.lr, args.warmup_steps, [15, 27])
+    N = np.maximum(len(trainset_generator.train_color_label),\
+                    len(trainset_generator.train_thermal_label))
+    total_batch = int(N / loader_batch) + 1
+
+    backbone_lr_scheduler = LRScheduler(0.1 * args.lr, total_batch, args)
+    head_lr_scheduler = LRScheduler(args.lr, total_batch, args)
+
+    backbone_lr = backbone_lr_scheduler.getlr()
+    head_lr = head_lr_scheduler.getlr()
+    optimizer_P = optim(args, backbone_lr, head_lr)
+    net_with_optim = OptimizerWithNetAndCriterion(net_with_criterion, optimizer_P)
 
     ########################################################################
     # Start Training
@@ -527,11 +533,6 @@ if __name__ == "__main__":
     best_path = None
 
     for epoch in range(args.start_epoch, args.epoch + 1):
-
-        optimizer_P = optim(epoch, backbone_lr_scheduler, head_lr_scheduler)
-        net_with_optim = OptimizerWithNetAndCriterion(
-            net_with_criterion, optimizer_P)
-
         print('==> Preparing Data Loader...')
         # identity sampler:
         sampler = IdentitySampler(trainset_generator.train_color_label,\
@@ -568,9 +569,7 @@ if __name__ == "__main__":
         dataset_helper = DatasetHelper(trainset, dataset_sink_mode=False)
 
         batch_idx = 0
-        N = np.maximum(len(trainset_generator.train_color_label),
-                       len(trainset_generator.train_thermal_label))
-        total_batch = int(N / loader_batch) + 1
+
         print("The total number of batch is ->", total_batch)
         print("The total number of batch is ->", total_batch, file=log_file)
 
@@ -609,7 +608,7 @@ if __name__ == "__main__":
                       'Loss:{Loss:.4f}   '
                       'Batch Time:{batch_time:.2f}  '
                       .format(epoch, batch_idx, total_batch,
-                              LR=float(head_lr_scheduler.getlr(epoch)),
+                              LR=float(head_lr[(epoch-1) * total_batch].asnumpy()),
                               Loss=float(loss_avg.avg),
                               batch_time=batch_time.avg,
                               ))
@@ -618,7 +617,7 @@ if __name__ == "__main__":
                       'Loss:{Loss:.4f}   '
                       'Batch Time:{batch_time:.3f}  '
                       .format(epoch, batch_idx, total_batch,
-                              LR=float(head_lr_scheduler.getlr(epoch)),
+                              LR=float(head_lr[(epoch-1) * total_batch].asnumpy()),
                               Loss=float(loss.asnumpy()),
                               batch_time=batch_time.avg,
                               ), file=log_file)
