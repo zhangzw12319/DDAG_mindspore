@@ -205,7 +205,7 @@ class LRScheduler():
         self.warmup_steps = args.warmup_steps
         self.start_decay = args.start_decay
         self.end_decay = args.end_decay
-        
+
         assert (self.epochs > self.warmup_steps) and (self.start_decay > self.warmup_steps)\
             and (self.end_decay > self.start_decay)
 
@@ -236,7 +236,7 @@ class LRScheduler():
 
             # fill the steps in current epoch
 
-            for i in range(self.steps_per_epoch):
+            for _ in range(self.steps_per_epoch):
                 lr.append(current_lr)
         lr = Tensor(lr, dtype=ms.float32)
 

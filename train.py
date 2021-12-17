@@ -197,10 +197,10 @@ def decode(img):
     return Image.fromarray(img)
 
 
-def optim(args, b_lr, h_lr):
+def optim(args_, b_lr, h_lr):
     """ Define optimizers """
 
-    if args.optim == 'sgd':
+    if args_.optim == 'sgd':
         ignored_params = list(map(id, net.bottleneck.trainable_params())) \
             + list(map(id, net.classifier.trainable_params())) \
             + list(map(id, net.wpa.trainable_params())) \
@@ -216,9 +216,9 @@ def optim(args, b_lr, h_lr):
             {'params': net.wpa.trainable_params(), 'lr': h_lr},
             {'params': net.graph_att.trainable_params(), 'lr': h_lr}
         ],
-                    learning_rate=args.lr, weight_decay=5e-4, nesterov=True, momentum=0.9)
+                    learning_rate=args_.lr, weight_decay=5e-4, nesterov=True, momentum=0.9)
 
-    elif args.optim == 'adam':
+    elif args_.optim == 'adam':
         ignored_params = list(map(id, net.bottleneck.trainable_params())) \
             + list(map(id, net.classifier.trainable_params())) \
             + list(map(id, net.wpa.trainable_params())) \
@@ -234,7 +234,7 @@ def optim(args, b_lr, h_lr):
             {'params': net.wpa.trainable_params(), 'lr': h_lr},
             {'params': net.graph_att.trainable_params(), 'lr': h_lr}
         ],
-                     learning_rate=args.lr, weight_decay=5e-4)
+                     learning_rate=args_.lr, weight_decay=5e-4)
 
     return opt_p
 
